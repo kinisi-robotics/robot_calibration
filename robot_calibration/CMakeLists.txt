@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 project(robot_calibration)
 
+# Always build in Debug mode
+set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
@@ -12,7 +15,10 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -march=native)
+  # if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  #   add_compile_options(-g -O0)
+  # endif()
 endif()
 
 find_package(tinyxml2_vendor QUIET)
