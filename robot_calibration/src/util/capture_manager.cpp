@@ -43,10 +43,11 @@ bool CaptureManager::init(rclcpp::Node::SharedPtr node)
     std::bind(&CaptureManager::callback, this, std::placeholders::_1));
 
   // Create chain manager
-  chain_manager_ = new ChainManager(node);
+  chain_manager_ = std::make_unique<ChainManager>(node);
 
   // Load feature finders
-  if (!feature_finder_loader_.load(node, finders_))
+  finders_ = std::make_shared<FeatureFinderMap>();
+  if (!feature_finder_loader_.load(node, *finders_))
   {
     RCLCPP_FATAL(LOGGER, "Unable to load feature finders!");
     return false;
@@ -57,7 +58,7 @@ bool CaptureManager::init(rclcpp::Node::SharedPtr node)
 
 bool CaptureManager::moveToState(const sensor_msgs::msg::JointState& state)
 {
-  if (!chain_manager_->moveToState(state))
+  if (!chain_manager_ || !chain_manager_->moveToState(state))
   {
     return false;
   }
@@ -70,7 +71,7 @@ bool CaptureManager::moveToState(const sensor_msgs::msg::JointState& state)
 bool CaptureManager::captureFeatures(const std::vector<std::string>& feature_names,
                                      robot_calibration_msgs::msg::CalibrationData& msg)
 {
-  for (auto it = finders_.begin(); it != finders_.end(); ++it)
+  for (auto it = finders_->begin(); it != finders_->end(); ++it)
   {
     if (feature_names.empty() ||
         std::find(feature_names.begin(), feature_names.end(), it->first) != feature_names.end())

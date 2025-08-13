@@ -47,9 +47,9 @@ private:
   std::string description_;
   bool description_valid_;
 
-  robot_calibration::ChainManager* chain_manager_;
+  std::unique_ptr<robot_calibration::ChainManager> chain_manager_;
   robot_calibration::FeatureFinderLoader feature_finder_loader_;
-  robot_calibration::FeatureFinderMap finders_;
+  std::shared_ptr<robot_calibration::FeatureFinderMap> finders_;
 };
 
 }  // namespace robot_calibration
