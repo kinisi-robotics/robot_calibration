@@ -33,6 +33,7 @@ class CaptureManager
 {
 public:
   CaptureManager();
+  ~CaptureManager();
   bool init(rclcpp::Node::SharedPtr node);
   bool moveToState(const sensor_msgs::msg::JointState& state);
   bool captureFeatures(const std::vector<std::string>& feature_names,

@@ -32,6 +32,15 @@ CaptureManager::CaptureManager()
   description_valid_ = false;
 }
 
+CaptureManager::~CaptureManager()
+{
+  // Ensure plugin instances are destroyed before the loader
+  if (finders_) {
+    finders_->clear();
+    finders_.reset();
+  }
+}
+
 bool CaptureManager::init(rclcpp::Node::SharedPtr node)
 {
   // Publish calibration data (to be recorded by rosbag)
