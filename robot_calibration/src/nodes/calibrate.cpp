@@ -83,10 +83,10 @@ int main(int argc, char** argv)
   if (argc > 1)
     data_source = argv[1];
 
+  robot_calibration::CaptureManager capture_manager;
   if (data_source.compare("--from-bag") != 0)
   {
     // No name provided for a calibration bag file, must do capture
-    robot_calibration::CaptureManager capture_manager;
     if (!capture_manager.init(node))
     {
       // Error will be printed in function
