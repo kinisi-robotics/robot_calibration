@@ -226,7 +226,7 @@ int main(int argc, char** argv)
   robot_calibration::exportResults(opt, description_msg.data, data);
 
   RCLCPP_INFO(logger, "Done calibrating");
-  rclcpp::shutdown();
-
-  return 0;
+  
+  // Use exit() to avoid destructor segfault in some versions of robot_calibration
+  exit(0);
 }
