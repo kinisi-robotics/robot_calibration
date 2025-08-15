@@ -61,6 +61,7 @@ public:
     auto node = node_.lock();
     if (!node)
     {
+      std::cout << "NO NODE!!!" << std::endl;
       // Can't even really warn here...
       return false;
     }
