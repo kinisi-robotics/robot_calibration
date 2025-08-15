@@ -76,7 +76,7 @@ inline bool load_bag(const std::string& file_name,
     
     if (bag_message)
     {
-      RCLCPP_INFO(rclcpp::get_logger("robot_calibration"), "Read bag message: %s", bag_message->topic_name.c_str());
+      RCLCPP_DEBUG(rclcpp::get_logger("robot_calibration"), "Read bag message: %s", bag_message->topic_name.c_str());
     }
 
     if (bag_message->topic_name == "/robot_description")
@@ -91,12 +91,12 @@ inline bool load_bag(const std::string& file_name,
       rclcpp::SerializedMessage extracted_serialized_msg(*bag_message->serialized_data);
       rclcpp::Serialization<robot_calibration_msgs::msg::CalibrationData> serialization;
       serialization.deserialize_message(&extracted_serialized_msg, &msg);
-      RCLCPP_INFO(rclcpp::get_logger("robot_calibration"), "CalibrationData message read: observations.size() = %zu", msg.observations.size());
+      RCLCPP_DEBUG(rclcpp::get_logger("robot_calibration"), "CalibrationData message read: observations.size() = %zu", msg.observations.size());
       for (size_t i = 0; i < msg.observations.size(); ++i) {
-        RCLCPP_INFO(rclcpp::get_logger("robot_calibration"), "  Observation[%zu]: sensor_name = %s", i, msg.observations[i].sensor_name.c_str());
+        RCLCPP_DEBUG(rclcpp::get_logger("robot_calibration"), "  Observation[%zu]: sensor_name = %s", i, msg.observations[i].sensor_name.c_str());
         for (size_t j = 0; j < msg.observations[i].features.size(); ++j) {
           const auto& feature = msg.observations[i].features[j];
-          RCLCPP_INFO(rclcpp::get_logger("robot_calibration"), "    Feature[%zu]: frame_id = %s, x = %.3f, y = %.3f, z = %.3f", j, feature.header.frame_id.c_str(), feature.point.x, feature.point.y, feature.point.z);
+          RCLCPP_DEBUG(rclcpp::get_logger("robot_calibration"), "    Feature[%zu]: frame_id = %s, x = %.3f, y = %.3f, z = %.3f", j, feature.header.frame_id.c_str(), feature.point.x, feature.point.y, feature.point.z);
         }
       }
       data.push_back(msg);
