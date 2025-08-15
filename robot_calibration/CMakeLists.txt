@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(robot_calibration)
 
-# Always build in Debug mode
-set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
