@@ -48,8 +48,8 @@ private:
   std::string description_;
   bool description_valid_;
 
-  std::unique_ptr<robot_calibration::ChainManager> chain_manager_;
   robot_calibration::FeatureFinderLoader feature_finder_loader_;
+  std::unique_ptr<robot_calibration::ChainManager> chain_manager_;
   std::shared_ptr<robot_calibration::FeatureFinderMap> finders_;
 };
 

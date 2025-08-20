@@ -36,9 +36,19 @@ CaptureManager::~CaptureManager()
 {
   // Ensure plugin instances are destroyed before the loader
   if (finders_) {
+    // Explicitly clear and destroy all plugin instances
+    for (auto& finder_pair : *finders_) {
+      finder_pair.second.reset();
+    }
     finders_->clear();
     finders_.reset();
   }
+  
+  // Explicitly cleanup the feature finder loader to destroy all plugin instances
+  feature_finder_loader_.cleanup();
+  
+  // Force destruction order by nullifying pointers
+  chain_manager_.reset();
 }
 
 bool CaptureManager::init(rclcpp::Node::SharedPtr node)

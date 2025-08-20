@@ -23,6 +23,8 @@
 
 #include <map>
 #include <memory>
+#include <set>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <pluginlib/class_loader.hpp>
@@ -47,6 +49,12 @@ public:
   {
   }
 
+  ~FeatureFinderLoader()
+  {
+    // Ensure all plugin instances are cleaned up before ClassLoader destructs
+    cleanup();
+  }
+
   bool load(rclcpp::Node::SharedPtr node,
             FeatureFinderMap& features)
   {
@@ -54,8 +62,10 @@ public:
     tf2_buffer_ = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
 
-    // Empty the mapping
+    // Empty the mapping and clear tracked instances
     features.clear();
+    loaded_instances_.clear();
+    loaded_types_.clear();
 
     auto logger = node->get_logger();
 
@@ -89,6 +99,8 @@ public:
       if (finder && finder->init(name, tf2_buffer_, node))
       {
         features[name] = finder;
+        loaded_instances_.push_back(finder);  // Track for cleanup
+        loaded_types_.insert(type);  // Track plugin type for library cleanup
       }
       else
       {
@@ -106,8 +118,29 @@ public:
     return true;
   }
 
+  void cleanup()
+  {
+    // Clear all tracked instances to ensure proper destruction order
+    loaded_instances_.clear();
+    
+    // Try to unload libraries for all loaded plugin types
+    for (const auto& type : loaded_types_) {
+      try {
+        plugin_loader_.unloadLibraryForClass(type);
+      } catch (...) {
+        // Ignore errors during unload - this is best effort
+      }
+    }
+    loaded_types_.clear();
+    
+    tf2_listener_.reset();
+    tf2_buffer_.reset();
+  }
+
 private:
   pluginlib::ClassLoader<robot_calibration::FeatureFinder> plugin_loader_;
+  std::vector<FeatureFinderPtr> loaded_instances_;  // Track all loaded instances
+  std::set<std::string> loaded_types_;  // Track plugin types for library cleanup
 
   // Shared TF2 buffer (since listener creates an extra rclcpp::Node)
   std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
