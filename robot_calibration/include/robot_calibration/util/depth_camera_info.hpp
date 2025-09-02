@@ -52,7 +52,7 @@ public:
     std::string driver_name =
       node->declare_parameter<std::string>(name + ".camera_driver", "/head_camera/driver");
     auto params_client = std::make_shared<rclcpp::SyncParametersClient>(node, driver_name);
-    if (params_client->wait_for_service(std::chrono::seconds(10)))
+    if (params_client->wait_for_service(std::chrono::milliseconds(500)))
     {
       auto parameters = params_client->get_parameters({"z_offset_mm", "z_scaling"});
       for (auto& param : parameters)
