@@ -163,7 +163,7 @@ int main(int argc, char** argv)
         }
 
         // Make sure sensor data is up to date after settling
-        rclcpp::sleep_for(std::chrono::milliseconds(2000));
+        rclcpp::sleep_for(std::chrono::milliseconds(3000));
 
         // Get pose of the features
         if (!capture_manager.captureFeatures(poses[pose_idx].features, msg))
