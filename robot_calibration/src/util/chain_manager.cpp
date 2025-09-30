@@ -61,10 +61,11 @@ ChainManager::ChainManager(rclcpp::Node::SharedPtr node, long int wait_time) :
     if (controller->shouldPlan() && (!move_group_))
     {
       move_group_ = std::make_shared<ActionClient<MoveGroupAction>>();
-      move_group_->init(node, "move_group");
+      // MoveIt MoveGroup action server name is 'move_action' in ROS 2
+      move_group_->init(node, "move_action");
       if (!move_group_->waitForServer(wait_time))
       {
-        RCLCPP_WARN(LOGGER, "Failed to connect to move_group");
+        RCLCPP_WARN(LOGGER, "Failed to connect to move_action (MoveGroup). Planning will be skipped.");
       }
     }
 
@@ -161,6 +162,20 @@ bool ChainManager::moveToState(const sensor_msgs::msg::JointState& state)
   double max_duration = duration_;
 
   // Split into different controllers
+  // Detect if multiple chains share the same FollowJointTrajectory action server topic.
+  bool shared_topic = false;
+  for (size_t i = 0; i < controllers_.size() && !shared_topic; ++i)
+  {
+    for (size_t j = i + 1; j < controllers_.size(); ++j)
+    {
+      if (controllers_[i]->topic_name == controllers_[j]->topic_name)
+      {
+        shared_topic = true;
+        break;
+      }
+    }
+  }
+
   for (size_t i = 0; i < controllers_.size(); ++i)
   {
     auto goal = TrajectoryAction::Goal();
@@ -169,6 +184,17 @@ bool ChainManager::moveToState(const sensor_msgs::msg::JointState& state)
     trajectory_msgs::msg::JointTrajectoryPoint p = makePoint(state, controllers_[i]->joint_names);
     if (controllers_[i]->shouldPlan())
     {
+      RCLCPP_INFO(LOGGER,
+                  "Planning with MoveIt for chain '%s' using group '%s' (velocity_factor=%.2f)",
+                  controllers_[i]->chain_name.c_str(),
+                  controllers_[i]->chain_planning_group.c_str(),
+                  velocity_factor_);
+      // If MoveGroup action isn't connected, skip planning to avoid segfaults
+      if (!move_group_)
+      {
+        RCLCPP_WARN(LOGGER, "MoveIt MoveGroup action client not initialized; skipping planning.");
+        return false;
+      }
       // Call MoveIt
       auto moveit_goal = MoveGroupAction::Goal();
       moveit_goal.request.group_name = controllers_[i]->chain_planning_group;
@@ -199,9 +225,15 @@ bool ChainManager::moveToState(const sensor_msgs::msg::JointState& state)
       moveit_goal.planning_options.plan_only = true;
 
       move_group_->sendGoal(moveit_goal);
-      move_group_->waitForResult(rclcpp::Duration::from_seconds(60.0));
+      auto state = move_group_->waitForResult(rclcpp::Duration::from_seconds(60.0));
       auto result = move_group_->getResult();
-      if (result->error_code.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS)
+      if (!result)
+      {
+        RCLCPP_ERROR(LOGGER, "MoveIt planning result is null (timeout or server unavailable)");
+        return false;
+      }
+      if (state != ActionClientState::SUCCEEDED ||
+          result->error_code.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS)
       {
         // Unable to plan, return error
         return false;
@@ -222,13 +254,26 @@ bool ChainManager::moveToState(const sensor_msgs::msg::JointState& state)
 
     // Call actions
     controllers_[i]->client.sendGoal(goal);
+
+    // If multiple chains share one controller topic (e.g., one arm controller for both arms),
+    // execute sequentially to avoid goal preemption between chains.
+    if (shared_topic)
+    {
+      RCLCPP_INFO(LOGGER,
+                  "Shared controller topic '%s' detected; executing chain '%s' sequentially",
+                  controllers_[i]->topic_name.c_str(), controllers_[i]->chain_name.c_str());
+      controllers_[i]->client.waitForResult(rclcpp::Duration::from_seconds(max_duration * 1.5));
+    }
   }
 
-  // Wait for results
-  for (size_t i = 0; i < controllers_.size(); ++i)
+  if (!shared_topic)
   {
-    controllers_[i]->client.waitForResult(rclcpp::Duration::from_seconds(max_duration * 1.5));
-    // TODO: catch errors with clients
+    // Wait for results in parallel case
+    for (size_t i = 0; i < controllers_.size(); ++i)
+    {
+      controllers_[i]->client.waitForResult(rclcpp::Duration::from_seconds(max_duration * 1.5));
+      // TODO: catch errors with clients
+    }
   }
 
   return true;

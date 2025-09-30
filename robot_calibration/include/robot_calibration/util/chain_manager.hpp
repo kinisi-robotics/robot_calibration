@@ -47,7 +47,8 @@ class ChainManager
                     const std::string& topic,
                     const std::string& planning_group) :
       chain_name(name),
-      chain_planning_group(planning_group)
+      chain_planning_group(planning_group),
+      topic_name(topic)
     {
       client.init(node, topic);
     }
@@ -60,6 +61,7 @@ class ChainManager
     robot_calibration::ActionClient<TrajectoryAction> client;
     std::string chain_name;
     std::string chain_planning_group;
+    std::string topic_name;
     std::vector<std::string> joint_names;
   };
 
