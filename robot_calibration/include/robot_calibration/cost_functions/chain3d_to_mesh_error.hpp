@@ -41,7 +41,7 @@ namespace robot_calibration
  *
  * Based on "Real Time Collision Detection", pg 130
  */
-double distToLine(Eigen::Vector3d& a, Eigen::Vector3d& b, Eigen::Vector3d c)
+double distToLine(const Eigen::Vector3d& a, const Eigen::Vector3d& b, const Eigen::Vector3d c)
 {
   Eigen::Vector3d ab = b - a;
   Eigen::Vector3d ac = c - a;
@@ -61,6 +61,91 @@ double distToLine(Eigen::Vector3d& a, Eigen::Vector3d& b, Eigen::Vector3d c)
   }
   // C actually projects between
   return ac.dot(ac) - e * e / f;
+}
+
+double pointDistanceToTriangle(const Eigen::Vector3d& p,
+                               const Eigen::Vector3d& A,
+                               const Eigen::Vector3d& B,
+                               const Eigen::Vector3d& C)
+ {
+  // Based on "Real-Time Collision Detection" (Ericson). Returns squared distance.
+  const Eigen::Vector3d AB = B - A;
+  const Eigen::Vector3d AC = C - A;
+  const Eigen::Vector3d AP = p - A;
+
+  const double d1 = AB.dot(AP);
+  const double d2 = AC.dot(AP);
+  if (d1 <= 0.0 && d2 <= 0.0)
+  {
+    // Closest to vertex A
+    return AP.dot(AP);
+  }
+
+  const Eigen::Vector3d BP = p - B;
+  const double d3 = AB.dot(BP);
+  const double d4 = AC.dot(BP);
+  if (d3 >= 0.0 && d4 <= d3)
+  {
+    // Closest to vertex B
+    return BP.dot(BP);
+  }
+
+  // Check if P in edge region of AB, if so return projection distance
+  const double vc = d1 * d4 - d3 * d2;
+  if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0)
+  {
+    const double ab2 = AB.dot(AB);
+    const double v = d1 / (d1 - d3);
+    // Compute squared distance without constructing the closest point
+    const double ap2 = AP.dot(AP);
+    return ap2 - 2.0 * v * d1 + v * v * ab2;
+  }
+
+  const Eigen::Vector3d CP = p - C;
+  const double d5 = AB.dot(CP);
+  const double d6 = AC.dot(CP);
+  if (d6 >= 0.0 && d5 <= d6)
+  {
+    // Closest to vertex C
+    return CP.dot(CP);
+  }
+
+  // Check if P in edge region of AC
+  const double vb = d5 * d2 - d1 * d6;
+  if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0)
+  {
+    const double ac2 = AC.dot(AC);
+    const double w = d2 / (d2 - d6);
+    const double ap2 = AP.dot(AP);
+    return ap2 - 2.0 * w * d2 + w * w * ac2;
+  }
+
+  // Check if P in edge region of BC
+  const double va = d3 * d6 - d5 * d4;
+  if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0)
+  {
+    const Eigen::Vector3d BC = C - B;
+    const double bc2 = BC.dot(BC);
+    const double bp2 = BP.dot(BP);
+    const double bp_dot_bc = BP.dot(BC);
+    const double denom = (d4 - d3) + (d5 - d6);
+    const double w = (d4 - d3) / denom;
+    return bp2 - 2.0 * w * bp_dot_bc + w * w * bc2;
+  }
+
+  // P inside face region. Compute squared distance to plane.
+  const Eigen::Vector3d N = AB.cross(AC);
+  const double n2 = N.squaredNorm();
+  if (n2 <= 1e-16)
+  {
+    // Degenerate triangle: fallback to edges
+    const double d_ab = distToLine(A, B, p);
+    const double d_bc = distToLine(B, C, p);
+    const double d_ca = distToLine(C, A, p);
+    return std::min(d_ab, std::min(d_bc, d_ca));
+  }
+  const double dist_to_plane = AP.dot(N);
+  return (dist_to_plane * dist_to_plane) / n2;
 }
 
 /**
@@ -91,7 +176,7 @@ struct Chain3dToMesh
   virtual ~Chain3dToMesh() {}
 
   bool operator()(double const * const * free_params,
-                  double* residuals) const
+                  double* residuals) const noexcept
   {
     // Update calibration offsets based on free params
     offsets_->update(free_params[0]);
@@ -114,14 +199,10 @@ struct Chain3dToMesh
         int B_idx = mesh_->triangles[(3 * t) + 1];
         int C_idx = mesh_->triangles[(3 * t) + 2];
         // Get the vertices
-        Eigen::Vector3d A(mesh_->vertices[(3 * A_idx) + 0], mesh_->vertices[(3 * A_idx) + 1], mesh_->vertices[(3 * A_idx) + 2]);
-        Eigen::Vector3d B(mesh_->vertices[(3 * B_idx) + 0], mesh_->vertices[(3 * B_idx) + 1], mesh_->vertices[(3 * B_idx) + 2]);
-        Eigen::Vector3d C(mesh_->vertices[(3 * C_idx) + 0], mesh_->vertices[(3 * C_idx) + 1], mesh_->vertices[(3 * C_idx) + 2]);
-        // Compare each line segment
-        double d = distToLine(A, B, p);
-        d = std::min(d, distToLine(B, C, p));
-        d = std::min(d, distToLine(C, A, p));
-        dist = std::min(d, dist);
+        const Eigen::Map<const Eigen::Vector3d> A(&mesh_->vertices[(3 * A_idx)]);
+        const Eigen::Map<const Eigen::Vector3d> B(&mesh_->vertices[(3 * B_idx)]);
+        const Eigen::Map<const Eigen::Vector3d> C(&mesh_->vertices[(3 * C_idx)]);
+        dist = std::min(pointDistanceToTriangle(p, A, B, C), dist);
       }
       residuals[pt] = std::sqrt(dist);
     }
