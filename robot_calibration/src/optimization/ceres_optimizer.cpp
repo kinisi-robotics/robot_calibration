@@ -44,6 +44,7 @@
 #include <robot_calibration/models/chain3d.hpp>
 #include <string>
 #include <map>
+#include <limits>
 
 namespace robot_calibration
 {
@@ -314,7 +315,7 @@ int Optimizer::optimize(OptimizationParams& params,
         }
 
         problem->AddResidualBlock(cost,
-                                  NULL /* squared loss */,
+                                  NULL,//new ceres::CauchyLoss(0.05),
                                   free_params);
 
 
@@ -465,6 +466,45 @@ int Optimizer::optimize(OptimizationParams& params,
   // Save some status
   num_params_ = problem->NumParameters();
   num_residuals_ = problem->NumResiduals();
+
+  // Compute covariance and update standard deviations in offsets
+  {
+    // Compute covariance matrix for all free parameters as a single block
+    ceres::Covariance::Options covariance_options;
+    ceres::Covariance covariance(covariance_options);
+
+    std::vector<std::pair<const double*, const double*>> covariance_blocks;
+    covariance_blocks.emplace_back(free_params, free_params);
+
+    if (covariance.Compute(covariance_blocks, problem))
+    {
+      // Prepare stddev vector (default to NaN)
+      std::vector<double> param_stddevs(num_params_, std::numeric_limits<double>::quiet_NaN());
+
+      // Extract full covariance block and compute standard deviations (sqrt of diagonal)
+      std::vector<double> covariance_matrix(num_params_ * num_params_);
+      if (covariance.GetCovarianceBlock(free_params, free_params, covariance_matrix.data()))
+      {
+        for (int i = 0; i < num_params_; ++i)
+        {
+          double variance = covariance_matrix[i * num_params_ + i];
+          double std_dev = std::sqrt(std::max(0.0, variance));
+          param_stddevs[i] = std_dev;
+        }
+
+        offsets_->setStandardDeviations(param_stddevs);
+        RCLCPP_INFO(logger, "Computed covariance and updated standard deviations for %d parameters", num_params_);
+      }
+      else
+      {
+        RCLCPP_WARN(logger, "Covariance computed but failed to retrieve covariance block");
+      }
+    }
+    else
+    {
+      RCLCPP_WARN(logger, "Failed to compute covariance - problem may be singular or ill-conditioned");
+    }
+  }
 
   // Note: the error blocks will be managed by scoped_ptr in cost functor
   //       which takes ownership, and so we do not need to delete them here

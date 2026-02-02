@@ -21,6 +21,7 @@
 #define ROBOT_CALIBRATION_OPTIMIZATION_OFFSETS_HPP
 
 #include <kdl/chain.hpp>
+#include <vector>
 
 namespace robot_calibration
 {
@@ -97,6 +98,12 @@ public:
   /** \brief Update the urdf with the new offsets */
   std::string updateURDF(const std::string& urdf);
 
+  /** \brief Set standard deviations for all parameters in the same order as free params */
+  void setStandardDeviations(const std::vector<double>& stddevs);
+
+  /** \brief Get standard deviations for all parameters */
+  std::vector<double> getStandardDeviations() const;
+
 private:
   // Names of parameters being calibrated. The order of this vector
   // is the same as the free_param order will be interpreted.
@@ -107,6 +114,9 @@ private:
 
   // Values of parameters from last update
   std::vector<double> parameter_offsets_;
+
+  // Standard deviations for parameters (same order as free params)
+  std::vector<double> parameter_stddevs_;
 
   // Number of params being calibrated
   size_t num_free_params_;

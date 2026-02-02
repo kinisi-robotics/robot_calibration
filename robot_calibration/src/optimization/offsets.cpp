@@ -215,6 +215,17 @@ std::string OptimizationOffsets::getOffsetYAML()
   {
     ss << parameter_names_[i] << ": " << parameter_offsets_[i] << std::endl;
   }
+
+  // If we have standard deviations, emit them in YAML format under a mapping
+  if (!parameter_stddevs_.empty())
+  {
+    ss << "standard_deviations:" << std::endl;
+    for (size_t i = 0; i < parameter_names_.size(); ++i)
+    {
+      ss << "  " << parameter_names_[i] << ": " << parameter_stddevs_[i] << std::endl;
+    }
+  }
+
   return ss.str();
 }
 
@@ -383,6 +394,16 @@ std::string OptimizationOffsets::updateURDF(const std::string &urdf)
   std::string new_urdf = printer.CStr();
 
   return new_urdf;
+}
+
+void OptimizationOffsets::setStandardDeviations(const std::vector<double>& stddevs)
+{
+  parameter_stddevs_ = stddevs;
+}
+
+std::vector<double> OptimizationOffsets::getStandardDeviations() const
+{
+  return parameter_stddevs_;
 }
 
 }  // namespace robot_calibration
