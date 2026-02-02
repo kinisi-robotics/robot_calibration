@@ -139,6 +139,9 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       params->type = type;
       params->model = node->declare_parameter<std::string>(prefix + ".model", std::string());
       params->link_name = node->declare_parameter<std::string>(prefix + ".link_name", std::string());
+      // Optional per-error-block override resource URI for the mesh
+      params->mesh_override = node->declare_parameter<std::string>(
+        prefix + ".mesh_override", std::string());
       error_blocks.push_back(params);
     }
     else if (type == "plane_to_plane")

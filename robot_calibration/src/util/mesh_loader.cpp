@@ -19,6 +19,7 @@
 #include <Eigen/Geometry>
 
 #include <geometry_msgs/msg/point.hpp>
+#include <rclcpp/logging.hpp>
 #include <robot_calibration/util/mesh_loader.hpp>
 
 namespace robot_calibration
@@ -28,12 +29,21 @@ MeshLoader::MeshLoader(std::shared_ptr<urdf::Model> model) : model_(model)
 {
 }
 
-MeshPtr MeshLoader::getCollisionMesh(const std::string& link_name)
+MeshPtr MeshLoader::getCollisionMesh(const std::string& link_name, const std::string& mesh_override)
 {
+  // Generate an internal cache key that includes the override so that
+  // overriding a mesh doesn't accidentally return a previous cached
+  // (non-overridden) mesh.
+  std::string cache_key = link_name;
+  if (!mesh_override.empty())
+  {
+    cache_key = mesh_override + ":" + link_name;
+  }
+
   // See if we have already loaded the mesh
   for (size_t i = 0; i < link_names_.size(); ++i)
   {
-    if (link_names_[i] == link_name)
+    if (link_names_[i] == cache_key)
     {
       return meshes_[i];
     }
@@ -62,13 +72,24 @@ MeshPtr MeshLoader::getCollisionMesh(const std::string& link_name)
   // This is the resource path (package://path/x.mesh)
   std::string mesh_path = (dynamic_cast<urdf::Mesh*>(link->collision->geometry.get()))->filename;
 
+  // If an explicit override resource URI is specified, use it directly.
+  // The resource can be a package:// URI, file://, or any other supported
+  // URI that shapes::createMeshFromResource understands. Loading will
+  // fail if the resource is not available.
+  if (!mesh_override.empty())
+  {
+    RCLCPP_INFO(rclcpp::get_logger("robot_calibration.mesh_loader"),
+                "Overriding mesh %s -> %s", mesh_path.c_str(), mesh_override.c_str());
+    mesh_path = mesh_override;
+  }
+
   // Get the scale
   Eigen::Vector3d scale((dynamic_cast<urdf::Mesh*>(link->collision->geometry.get()))->scale.x,
                         (dynamic_cast<urdf::Mesh*>(link->collision->geometry.get()))->scale.y,
                         (dynamic_cast<urdf::Mesh*>(link->collision->geometry.get()))->scale.z);
 
   MeshPtr mesh(shapes::createMeshFromResource(mesh_path, scale));
-  link_names_.push_back(link_name);
+  link_names_.push_back(cache_key);
   meshes_.push_back(mesh);
 
   //ROS_INFO("Loaded %s with %u vertices", mesh_path.c_str(), mesh->vertex_count);

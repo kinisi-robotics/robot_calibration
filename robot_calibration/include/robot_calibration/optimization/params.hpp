@@ -100,7 +100,11 @@ struct OptimizationParams
     std::string model;
     // Link in URDF to use for mesh
     std::string link_name;
-  };
+    // Optional override resource URI for the mesh (e.g. package://my_pkg/meshes/mesh.stl).
+    // If set, the loader will attempt to load the mesh at this URI and fail
+    // if it cannot be loaded.
+    std::string mesh_override;
+  }; 
 
   struct PlaneToPlaneParams : Params
   {

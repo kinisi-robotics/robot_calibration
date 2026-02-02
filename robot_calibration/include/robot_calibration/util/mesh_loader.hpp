@@ -42,8 +42,11 @@ public:
 
   /**
    * @brief Get the collision mesh associated with a link in a URDF.
+   * @param link_name Name of the link in the URDF.
+   * @param mesh_override Optional resource URI (e.g. package://pkg/meshes/mesh.stl)
+   *        to override the mesh referenced in the URDF.
    */
-  MeshPtr getCollisionMesh(const std::string& link_name);
+  MeshPtr getCollisionMesh(const std::string& link_name, const std::string& mesh_override = "");
 
 private:
   std::shared_ptr<urdf::Model> model_;

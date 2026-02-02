@@ -284,8 +284,8 @@ int Optimizer::optimize(OptimizationParams& params,
         if (!hasSensor(data[i], chain_name))
           continue;
 
-        // Get the mesh
-        MeshPtr mesh = mesh_loader_->getCollisionMesh(p->link_name);
+        // Get the mesh (apply optional override resource URI from this error block)
+        MeshPtr mesh = mesh_loader_->getCollisionMesh(p->link_name, p->mesh_override);
         if (!mesh)
         {
           RCLCPP_ERROR(logger, "chain3d_to_mesh improperly configured: cannot load mesh for %s", p->link_name.c_str());
