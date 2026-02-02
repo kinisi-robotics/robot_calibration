@@ -386,6 +386,11 @@ sensor_msgs::msg::PointCloud2 PlaneFinder::extractPlane(sensor_msgs::msg::PointC
       best_d = d;
     }
   }
+
+  if(best_fit <= 0){
+    RCLCPP_ERROR(LOGGER, "Could not find a plane in the point cloud");
+    return sensor_msgs::msg::PointCloud2();
+  }
   // Note: parameters are in cloud.header.frame_id and not transform_frame
   RCLCPP_INFO(LOGGER, "Found plane with parameters: %f %f %f %f", best_normal(0), best_normal(1), best_normal(2), best_d);
 
