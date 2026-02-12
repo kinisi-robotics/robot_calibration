@@ -121,7 +121,9 @@ bool LedFinder::init(const std::string& name,
   }
 
   // Setup to get camera depth info
-  if (!depth_camera_manager_.init(name, node, LOGGER))
+  std::string camera_info_topic =
+    node->declare_parameter<std::string>(name + ".camera_info_topic", "/head_camera/depth/camera_info");
+  if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
   {
     // Error will have been printed by manager
     return false;

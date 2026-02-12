@@ -33,7 +33,8 @@ const unsigned Z = 2;
 
 template <typename T>
 CheckerboardFinder<T>::CheckerboardFinder() :
-  waiting_(false)
+  waiting_(false),
+  has_camera_info_(false)
 {
 }
 
@@ -82,11 +83,16 @@ bool CheckerboardFinder<T>::init(const std::string& name,
   // Publish where checkerboard points were seen
   publisher_ = node->create_publisher<sensor_msgs::msg::PointCloud2>(name + "_points", 10);
 
-  // Setup to get camera depth info
-  if (!depth_camera_manager_.init(name, node, LOGGER))
+  // Setup to get camera depth info (optional)
+  std::string camera_info_topic =
+    node->declare_parameter<std::string>(name + ".camera_info_topic", "");
+  if (!camera_info_topic.empty())
   {
-    // Error will have been printed by manager
-    return false;
+    if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
+    {
+      return false;
+    }
+    has_camera_info_ = true;
   }
 
   return true;
@@ -242,7 +248,10 @@ bool CheckerboardFinder<sensor_msgs::msg::PointCloud2>::findInternal(robot_calib
       }
 
       msg->observations[idx_cam].features[i] = rgbd;
-      msg->observations[idx_cam].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+      if (has_camera_info_)
+      {
+        msg->observations[idx_cam].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+      }
       msg->observations[idx_chain].features[i] = world;
 
       // Visualize
@@ -312,7 +321,10 @@ bool CheckerboardFinder<sensor_msgs::msg::Image>::findInternal(robot_calibration
       rgbd.point.z = 0.0;  // No Z information
 
       msg->observations[idx_cam].features[i] = rgbd;
-      msg->observations[idx_cam].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+      if (has_camera_info_)
+      {
+        msg->observations[idx_cam].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+      }
       msg->observations[idx_chain].features[i] = world;
     }
 

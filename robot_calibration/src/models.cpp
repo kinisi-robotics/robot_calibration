@@ -175,13 +175,17 @@ std::vector<geometry_msgs::msg::PointStamped> Camera3dModel::project(
   }
 
   // Get existing camera info
-  if (data.observations[sensor_idx].ext_camera_info.camera_info.p.size() != 12)
-    std::cerr << "Unexpected CameraInfo projection matrix size" << std::endl;
-
   double camera_fx = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_FX_INDEX];
   double camera_fy = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_FY_INDEX];
   double camera_cx = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_CX_INDEX];
   double camera_cy = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_CY_INDEX];
+
+  if (camera_fx == 0.0 || camera_fy == 0.0)
+  {
+    std::cerr << "Camera3dModel requires ext_camera_info with valid intrinsics (fx/fy are zero). "
+              << "Ensure camera_info_topic is set for the feature finder." << std::endl;
+    return points;
+  }
 
   /*
    * z_scale and z_offset defined in openni2_camera/src/openni2_driver.cpp
@@ -290,13 +294,17 @@ std::vector<geometry_msgs::msg::PointStamped> Camera2dModel::project_pixel_error
   }
 
   // Get existing camera info
-  if (data.observations[sensor_idx].ext_camera_info.camera_info.p.size() != 12)
-    std::cerr << "Unexpected CameraInfo projection matrix size" << std::endl;
-
   double camera_fx = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_FX_INDEX];
   double camera_fy = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_FY_INDEX];
   double camera_cx = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_CX_INDEX];
   double camera_cy = data.observations[sensor_idx].ext_camera_info.camera_info.p[CAMERA_INFO_P_CY_INDEX];
+
+  if (camera_fx == 0.0 || camera_fy == 0.0)
+  {
+    std::cerr << "Camera2dModel requires ext_camera_info with valid intrinsics (fx/fy are zero). "
+              << "Ensure camera_info_topic is set for the feature finder." << std::endl;
+    return pixels;
+  }
 
   // Get calibrated camera info
   camera_fx *= (1.0 + offsets.get(param_name_ + "_fx"));

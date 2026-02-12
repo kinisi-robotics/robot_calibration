@@ -161,7 +161,9 @@ bool PlaneFinder::init(const std::string& name,
   publisher_ = node->create_publisher<sensor_msgs::msg::PointCloud2>(name + "_points", 10);
 
   // Make sure we have CameraInfo before starting
-  if (!depth_camera_manager_.init(name, node, LOGGER))
+  std::string camera_info_topic =
+    node->declare_parameter<std::string>(name + ".camera_info_topic", "/head_camera/depth/camera_info");
+  if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
   {
     // Error will have been printed by manager
     return false;

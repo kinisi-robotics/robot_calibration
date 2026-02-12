@@ -52,7 +52,7 @@ TEST(CameraInfoTests, test_extended_camera_info)
   robot_calibration::DepthCameraInfoManager manager;
 
   rclcpp::Logger logger = node->get_logger();
-  manager.init("test_manager", node, logger);
+  manager.init("test_manager", "/head_camera/depth/camera_info", node, logger);
 
   robot_calibration_msgs::msg::ExtendedCameraInfo eci =
     manager.getDepthCameraInfo();

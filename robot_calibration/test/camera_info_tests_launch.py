@@ -11,7 +11,8 @@ def main(argv=sys.argv[1:]):
     test_node = Node(
         executable=[os.getenv("TEST_EXECUTABLE")],
         name="camera_info_tests",
-        parameters=[{"test_manager.camera_driver": "/camera_info_publisher"}],
+        parameters=[{"test_manager.camera_driver": "/camera_info_publisher",
+                     "test_manager.camera_info_topic": "/head_camera/depth/camera_info"}],
         output="screen",
     )
 

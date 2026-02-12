@@ -60,6 +60,7 @@ private:
   bool waiting_;
   typename T::ConstSharedPtr msg_;
   DepthCameraInfoManager depth_camera_manager_;
+  bool has_camera_info_;
 
   /*
    * ROS Parameters
