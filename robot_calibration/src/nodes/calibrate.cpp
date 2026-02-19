@@ -21,8 +21,10 @@
 #include <ctime>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <robot_calibration_msgs/msg/calibration_data.hpp>
 #include <robot_calibration_msgs/msg/capture_config.hpp>
+#include <robot_calibration_msgs/srv/capture_calibration.hpp>
 
 #include <robot_calibration/optimization/ceres_optimizer.hpp>
 #include <robot_calibration/optimization/export.hpp>
@@ -98,7 +100,9 @@ int main(int argc, char** argv)
 
     // Load a set of calibration poses
     std::vector<robot_calibration_msgs::msg::CaptureConfig> poses;
-    if (data_source.compare("--manual") != 0)
+    bool is_manual = (data_source.compare("--manual") == 0 ||
+                      data_source.compare("--manual-service") == 0);
+    if (!is_manual)
     {
       if (data_source.find(".yaml") != std::string::npos)
       {
@@ -121,9 +125,71 @@ int main(int argc, char** argv)
     }
     else
     {
-      RCLCPP_INFO(logger, "Using manual calibration mode");
+      RCLCPP_INFO(logger, "Using manual calibration mode (%s)", data_source.c_str());
     }
 
+    // Service-driven manual mode: expose a ROS2 service to trigger each capture.
+    // This replaces the stdin-based --manual mode with proper synchronous feedback.
+    if (data_source.compare("--manual-service") == 0)
+    {
+      bool capture_done = false;
+
+      // Services are hosted on a dedicated lightweight node, NOT on the main calibration node.
+      // captureFeatures() -> find() -> waitForMsg() calls rclcpp::spin_some(node) internally
+      // to receive fresh sensor data. If the services were on 'node' and we added 'node' to a
+      // persistent executor, that nested spin_some(node) call would throw "already added to an
+      // executor". Using a separate node avoids this: rclcpp::spin_some(service_node) only manages
+      // service_node. We also spin 'node' explicitly in the loop so that sensor callbacks keep
+      // firing between service calls (ensuring hasData() is satisfied and joint states stay fresh).
+      auto service_node = std::make_shared<rclcpp::Node>("robot_calibration_capture_service");
+
+      auto capture_service = service_node->create_service<robot_calibration_msgs::srv::CaptureCalibration>(
+        "/capture_calibration",
+        [&](const std::shared_ptr<robot_calibration_msgs::srv::CaptureCalibration::Request> request,
+            std::shared_ptr<robot_calibration_msgs::srv::CaptureCalibration::Response> response)
+        {
+          robot_calibration_msgs::msg::CalibrationData msg;
+          // Use requested feature names; empty list means capture all configured features.
+          std::vector<std::string> features(request->features.begin(), request->features.end());
+          if (capture_manager.captureFeatures(features, msg))
+          {
+            response->success = true;
+            response->message = "Captured sample " + std::to_string(data.size() + 1);
+            response->data = msg;
+            data.push_back(msg);
+            RCLCPP_INFO(logger, "Captured sample %zu via service", data.size());
+          }
+          else
+          {
+            response->success = false;
+            response->message = "Failed to capture features";
+            RCLCPP_WARN(logger, "Service-triggered capture failed");
+          }
+        });
+
+      auto stop_service = service_node->create_service<std_srvs::srv::Trigger>(
+        "/stop_calibration_capture",
+        [&](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+        {
+          capture_done = true;
+          response->success = true;
+          response->message = "Calibration capture stopping";
+          RCLCPP_INFO(logger, "Stop requested via service");
+        });
+
+      RCLCPP_INFO(logger, "Calibration capture services ready (/capture_calibration, /stop_calibration_capture)");
+
+      while (!capture_done && rclcpp::ok())
+      {
+        rclcpp::spin_some(node);
+        rclcpp::spin_some(service_node);
+        rclcpp::sleep_for(std::chrono::milliseconds(10));
+      }
+
+      RCLCPP_INFO(logger, "Done capturing samples");
+    }
+    else
     // For each pose in the capture sequence.
     for (unsigned pose_idx = 0;
          (pose_idx < poses.size() || poses.empty()) && rclcpp::ok();

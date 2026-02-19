@@ -1,0 +1,7 @@
+# Trigger a single calibration capture.
+# features: names of feature detectors to run. Leave empty to run all configured detectors.
+string[] features
+---
+bool success
+string message
+robot_calibration_msgs/CalibrationData data
