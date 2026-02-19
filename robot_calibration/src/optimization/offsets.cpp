@@ -193,6 +193,8 @@ bool OptimizationOffsets::loadOffsetYAML(const std::string& filename)
   std::ifstream f(filename.c_str());
   while (std::getline(f, line))
   {
+    if (line.empty() || line[0] == ' ')
+      continue;
     std::istringstream str(line.c_str());
     std::string param;
     double value;
