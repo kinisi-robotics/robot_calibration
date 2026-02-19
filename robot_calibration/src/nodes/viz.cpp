@@ -84,6 +84,20 @@ int main(int argc, char** argv)
     return -1;
   }
 
+  // Get all joint names from URDF for complete joint state publishing
+  std::vector<std::string> all_joint_names;
+  for (const auto& joint_pair : model.joints_)
+  {
+    const urdf::JointSharedPtr& joint = joint_pair.second;
+    // Only include movable joints (not fixed)
+    if (joint->type != urdf::Joint::FIXED && joint->type != urdf::Joint::UNKNOWN)
+    {
+      all_joint_names.push_back(joint->name);
+    }
+  }
+  RCLCPP_INFO_STREAM(node->get_logger(),
+    "Found " << all_joint_names.size() << " movable joints in URDF for complete joint state publishing");
+
   // Load calibration steps
   std::vector<std::string> calibration_steps =
     node->declare_parameter<std::vector<std::string>>("calibration_steps", std::vector<std::string>());
@@ -210,7 +224,46 @@ int main(int argc, char** argv)
       RCLCPP_FATAL(node->get_logger(), "Unable to load offsets from YAML");
       return -1;
     }
+  } else {
+
+      RCLCPP_FATAL_STREAM(node->get_logger(), "Unable to load offsets from YAML" << argc << " arguments provided, expected 3");
   }
+
+  // Helper lambda to create complete joint state from partial calibration data
+  auto create_complete_joint_state = [&all_joint_names, &offsets, &node](
+    const sensor_msgs::msg::JointState& calibration_state) -> sensor_msgs::msg::JointState
+  {
+    sensor_msgs::msg::JointState complete_state;
+    complete_state.header = calibration_state.header;
+
+    // Create a map of calibrated joint values for quick lookup
+    std::map<std::string, double> calibrated_positions;
+    for (size_t i = 0; i < calibration_state.name.size(); ++i)
+    {
+      double offset = offsets.get(calibration_state.name[i]);
+      calibrated_positions[calibration_state.name[i]] =
+        calibration_state.position[i] + offset;
+    }
+
+    // Build complete joint state with all joints
+    for (const auto& joint_name : all_joint_names)
+    {
+      complete_state.name.push_back(joint_name);
+
+      // Use calibrated value if available, otherwise default to 0.0
+      auto it = calibrated_positions.find(joint_name);
+      if (it != calibrated_positions.end())
+      {
+        complete_state.position.push_back(it->second);
+      }
+      else
+      {
+        complete_state.position.push_back(0.0);  // Default position for non-calibrated joints
+      }
+    }
+
+    return complete_state;
+  };
 
   // Publish messages
   for (size_t i = 0; i < data.size(); ++i)
@@ -254,14 +307,10 @@ int main(int argc, char** argv)
     }
     pub->publish(markers);
 
-    // Publish the joint states
-    sensor_msgs::msg::JointState state_msg = data[i].joint_states;
-    for (size_t j = 0; j < state_msg.name.size(); ++j)
-    {
-      double offset = offsets.get(state_msg.name[j]);
-      state_msg.position[j] += offset;
-    }
-    state->publish(state_msg);
+    // Publish complete joint states (calibrated + defaults for missing joints)
+    sensor_msgs::msg::JointState complete_state = create_complete_joint_state(data[i].joint_states);
+    complete_state.header.stamp = node->now();
+    state->publish(complete_state);
 
     // Publish sensor data (if present)
     for (size_t obs = 0; obs < data[i].observations.size(); ++obs)
