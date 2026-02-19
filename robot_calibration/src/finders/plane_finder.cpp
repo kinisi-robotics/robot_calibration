@@ -301,6 +301,14 @@ void PlaneFinder::removeInvalidPoints(sensor_msgs::msg::PointCloud2& cloud,
 
 sensor_msgs::msg::PointCloud2 PlaneFinder::extractPlane(sensor_msgs::msg::PointCloud2& cloud)
 {
+  // This fn assumes the point-cloud height is 1
+  // This will be true if removeInvalidPoints() is called first, but we should add a check
+  if (cloud.height != 1)
+  {
+    RCLCPP_ERROR(LOGGER, "PointCloud2 height is %d, expected 1. Please call removeInvalidPoints() first.", cloud.height);
+    return sensor_msgs::msg::PointCloud2();
+  }
+
   sensor_msgs::PointCloud2ConstIterator<float> xyz(cloud, "x");
 
   // Copy cloud to eigen matrix for SVD
