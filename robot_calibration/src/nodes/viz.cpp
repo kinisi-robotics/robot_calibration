@@ -202,7 +202,7 @@ int main(int argc, char** argv)
   }
 
   // Load final values for offsets (if requested)
-  if (argc == 3)
+  if (argc >= 3)
   {
     std::string offsets_yaml = argv[2];
     if (!offsets.loadOffsetYAML(offsets_yaml))
