@@ -47,7 +47,8 @@ class ChainManager
                     const std::string& topic,
                     const std::string& planning_group) :
       chain_name(name),
-      chain_planning_group(planning_group)
+      chain_planning_group(planning_group),
+      server_connected(false)
     {
       client.init(node, topic);
     }
@@ -61,6 +62,7 @@ class ChainManager
     std::string chain_name;
     std::string chain_planning_group;
     std::vector<std::string> joint_names;
+    bool server_connected;
   };
 
 public:
@@ -117,6 +119,7 @@ private:
 
   // Mechanisms for passing commands to controllers
   double duration_;
+  long int wait_time_;
   std::vector<std::shared_ptr<ChainController> > controllers_;
   std::shared_ptr<robot_calibration::ActionClient<MoveGroupAction>> move_group_;
   double velocity_factor_;  // scaling factor to slow down move_group plans

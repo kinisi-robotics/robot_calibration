@@ -26,7 +26,8 @@ namespace robot_calibration
 {
 
 ChainManager::ChainManager(rclcpp::Node::SharedPtr node, long int wait_time) :
-  state_is_valid_(false)
+  state_is_valid_(false),
+  wait_time_(wait_time)
 {
   // Store weak pointer to node
   node_ptr_ = node;
@@ -48,25 +49,13 @@ ChainManager::ChainManager(rclcpp::Node::SharedPtr node, long int wait_time) :
     group = node->declare_parameter<std::string>(name + ".planning_group", std::string());
 
     RCLCPP_INFO(LOGGER, "Creating chain %s on topic %s", name.c_str(), topic.c_str());
-    
+
     std::shared_ptr<ChainController> controller(new ChainController(node, name, topic, group));
     controller->joint_names =
       node->declare_parameter<std::vector<std::string>>(name + ".joints", std::vector<std::string>());
 
-    if (!controller->client.waitForServer(wait_time))
-    {
-      RCLCPP_WARN(LOGGER, "Failed to connect to %s", topic.c_str());
-    }
-
-    if (controller->shouldPlan() && (!move_group_))
-    {
-      move_group_ = std::make_shared<ActionClient<MoveGroupAction>>();
-      move_group_->init(node, "move_group");
-      if (!move_group_->waitForServer(wait_time))
-      {
-        RCLCPP_WARN(LOGGER, "Failed to connect to move_group");
-      }
-    }
+    // Action server connection is established lazily in moveToState() on first
+    // use, so startup is not blocked when running in manual mode.
 
     controllers_.push_back(controller);
   }
@@ -160,6 +149,28 @@ bool ChainManager::moveToState(const sensor_msgs::msg::JointState& state)
 {
   double max_duration = duration_;
 
+  // Lazy-initialize move_group on first call to moveToState, so that startup
+  // is not blocked in manual mode where moveToState is never called.
+  bool needs_move_group = false;
+  for (auto& c : controllers_)
+  {
+    if (c->shouldPlan()) { needs_move_group = true; break; }
+  }
+  if (needs_move_group && !move_group_)
+  {
+    auto node = node_ptr_.lock();
+    if (node)
+    {
+      RCLCPP_INFO(LOGGER, "Waiting for move_group...");
+      move_group_ = std::make_shared<ActionClient<MoveGroupAction>>();
+      move_group_->init(node, "move_group");
+      if (!move_group_->waitForServer(wait_time_))
+      {
+        RCLCPP_WARN(LOGGER, "Failed to connect to move_group");
+      }
+    }
+  }
+
   // Split into different controllers
   for (size_t i = 0; i < controllers_.size(); ++i)
   {
@@ -219,6 +230,16 @@ bool ChainManager::moveToState(const sensor_msgs::msg::JointState& state)
     }
 
     goal.goal_time_tolerance = rclcpp::Duration::from_seconds(1.0);
+
+    // Connect to the action server on first use
+    if (!controllers_[i]->server_connected)
+    {
+      if (!controllers_[i]->client.waitForServer(wait_time_))
+      {
+        RCLCPP_WARN(LOGGER, "Failed to connect to %s", controllers_[i]->chain_name.c_str());
+      }
+      controllers_[i]->server_connected = true;
+    }
 
     // Call actions
     controllers_[i]->client.sendGoal(goal);
