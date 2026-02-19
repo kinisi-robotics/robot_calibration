@@ -101,6 +101,7 @@ bool CheckerboardFinder<T>::init(const std::string& name,
 template <typename T>
 void CheckerboardFinder<T>::cameraCallback(typename T::ConstSharedPtr msg)
 {
+  has_data_ = true;
   if (waiting_)
   {
     msg_ = msg;

@@ -134,6 +134,7 @@ bool LedFinder::init(const std::string& name,
 
 void LedFinder::cameraCallback(sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud)
 {
+  has_data_ = true;
   if (waiting_)
   {
     cloud_ = *cloud;

@@ -76,9 +76,18 @@ public:
    */
   virtual bool find(robot_calibration_msgs::msg::CalibrationData * msg) = 0;
 
+  /**
+   *  @brief Returns true once at least one sensor message has been received.
+   *         Subclasses set has_data_ = true in their sensor callback.
+   *         Used by CaptureManager to wait for genuine readiness before
+   *         starting capture.
+   */
+  virtual bool hasData() const { return has_data_; }
+
 protected:
   std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
   rclcpp::Node::WeakPtr node_ptr_;
+  bool has_data_ = false;
 
 private:
   std::string name_;

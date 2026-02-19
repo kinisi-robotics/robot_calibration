@@ -87,6 +87,7 @@ bool ScanFinder::init(const std::string& name,
 
 void ScanFinder::scanCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
 {
+  has_data_ = true;
   if (waiting_)
   {
     scan_ = *scan;

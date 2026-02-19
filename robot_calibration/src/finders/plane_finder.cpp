@@ -174,6 +174,7 @@ bool PlaneFinder::init(const std::string& name,
 
 void PlaneFinder::cameraCallback(sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud)
 {
+  has_data_ = true;
   if (waiting_)
   {
     cloud_ = *cloud;

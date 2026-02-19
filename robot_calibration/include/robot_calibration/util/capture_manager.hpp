@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <robot_calibration/finders/loader.hpp>
 #include <robot_calibration/util/chain_manager.hpp>
 
@@ -43,6 +44,7 @@ private:
   void callback(std_msgs::msg::String::ConstSharedPtr msg);
 
   rclcpp::Publisher<robot_calibration_msgs::msg::CalibrationData>::SharedPtr data_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ready_pub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr urdf_sub_;
   std::string description_;
   bool description_valid_;
