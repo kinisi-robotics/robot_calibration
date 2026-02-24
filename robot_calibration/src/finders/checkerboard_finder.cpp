@@ -57,7 +57,7 @@ bool CheckerboardFinder<T>::init(const std::string& name,
   options.qos_overriding_options = rclcpp::QosOverridingOptions::with_default_policies();
   subscriber_ = node->create_subscription<T>(
     topic_name,
-    rclcpp::QoS(1).best_effort().keep_last(1),
+    rclcpp::QoS(1).reliable().keep_last(1),
     std::bind(&CheckerboardFinder::cameraCallback, this, std::placeholders::_1),
     options);
 

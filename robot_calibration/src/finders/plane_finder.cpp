@@ -109,7 +109,7 @@ bool PlaneFinder::init(const std::string& name,
   options.qos_overriding_options = rclcpp::QosOverridingOptions::with_default_policies();
   subscriber_ = node->create_subscription<sensor_msgs::msg::PointCloud2>(
     topic_name,
-    rclcpp::QoS(1).best_effort(),
+    rclcpp::QoS(1).reliable(),
     std::bind(&PlaneFinder::cameraCallback, this, std::placeholders::_1),
     options);
 
