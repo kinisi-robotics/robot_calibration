@@ -109,6 +109,7 @@ private:
   std::vector<uint8_t> codes_;
 
   DepthCameraInfoManager depth_camera_manager_;
+  bool has_camera_info_;
 
   /*
    * ROS Parameters

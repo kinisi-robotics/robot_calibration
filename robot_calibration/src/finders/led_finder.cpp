@@ -46,7 +46,8 @@ double distancePoints(
 }
 
 LedFinder::LedFinder() :
-  waiting_(false)
+  waiting_(false),
+  has_camera_info_(false)
 {
 }
 
@@ -120,13 +121,16 @@ bool LedFinder::init(const std::string& name,
     tracker_publishers_.push_back(pub);
   }
 
-  // Setup to get camera depth info
+  // Setup to get camera depth info (optional)
   std::string camera_info_topic =
-    node->declare_parameter<std::string>(name + ".camera_info_topic", "/head_camera/depth/camera_info");
-  if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
+    node->declare_parameter<std::string>(name + ".camera_info_topic", "");
+  if (!camera_info_topic.empty())
   {
-    // Error will have been printed by manager
-    return false;
+    if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
+    {
+      return false;
+    }
+    has_camera_info_ = true;
   }
 
   return true;
@@ -326,7 +330,10 @@ bool LedFinder::find(robot_calibration_msgs::msg::CalibrationData * msg)
 
     // Push back observation
     observations[CAMERA].features.push_back(rgbd_pt);
-    observations[CAMERA].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+    if (has_camera_info_)
+    {
+      observations[CAMERA].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+    }
 
     // Visualize
     iter_cloud[0] = rgbd_pt.point.x;

@@ -88,6 +88,7 @@ protected:
   rclcpp::Clock::SharedPtr clock_;
 
   bool waiting_;
+  bool has_camera_info_;
   sensor_msgs::msg::PointCloud2 cloud_;
   DepthCameraInfoManager depth_camera_manager_;
 

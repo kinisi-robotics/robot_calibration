@@ -87,7 +87,8 @@ int sampleCloud(const sensor_msgs::msg::PointCloud2& points,
 }
 
 PlaneFinder::PlaneFinder() :
-  waiting_(false)
+  waiting_(false),
+  has_camera_info_(false)
 {
 }
 
@@ -160,13 +161,16 @@ bool PlaneFinder::init(const std::string& name,
   // Publish the observation as a PointCloud2
   publisher_ = node->create_publisher<sensor_msgs::msg::PointCloud2>(name + "_points", 10);
 
-  // Make sure we have CameraInfo before starting
+  // Setup to get camera depth info (optional)
   std::string camera_info_topic =
-    node->declare_parameter<std::string>(name + ".camera_info_topic", "/head_camera/depth/camera_info");
-  if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
+    node->declare_parameter<std::string>(name + ".camera_info_topic", "");
+  if (!camera_info_topic.empty())
   {
-    // Error will have been printed by manager
-    return false;
+    if (!depth_camera_manager_.init(name, camera_info_topic, node, LOGGER))
+    {
+      return false;
+    }
+    has_camera_info_ = true;
   }
 
   return true;
@@ -486,7 +490,10 @@ void PlaneFinder::extractObservation(const std::string& sensor_name,
   int idx_cam = msg->observations.size();
   msg->observations.resize(msg->observations.size() + 1);
   msg->observations[idx_cam].sensor_name = sensor_name;
-  msg->observations[idx_cam].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+  if (has_camera_info_)
+  {
+    msg->observations[idx_cam].ext_camera_info = depth_camera_manager_.getDepthCameraInfo();
+  }
 
   // Get observation points
   std::vector<geometry_msgs::msg::PointStamped> sampled_points;
