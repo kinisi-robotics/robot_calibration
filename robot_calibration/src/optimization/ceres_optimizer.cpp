@@ -20,8 +20,12 @@
 
 #include <robot_calibration/optimization/ceres_optimizer.hpp>
 
+#include <array>
+#include <deque>
 #include <memory>
 #include <ceres/ceres.h>
+#include <opencv2/calib3d.hpp>
+#include <opencv2/core.hpp>
 
 #if __has_include(<urdf/model.hpp>)
 #include <urdf/model.hpp>
@@ -33,6 +37,7 @@
 
 #include <robot_calibration/optimization/offsets.hpp>
 #include <robot_calibration/util/calibration_data.hpp>
+#include <robot_calibration/cost_functions/stereo_reprojection_error.hpp>
 #include <robot_calibration/cost_functions/chain3d_to_camera2d_error.hpp>
 #include <robot_calibration/cost_functions/chain3d_to_chain3d_error.hpp>
 #include <robot_calibration/cost_functions/chain3d_to_mesh_error.hpp>
@@ -162,6 +167,10 @@ int Optimizer::optimize(OptimizationParams& params,
 
   // Houston, we have a problem...
   ceres::Problem* problem = new ceres::Problem();
+
+  // Per-observation board poses for stereo reprojection error blocks.
+  // Using deque so that references remain stable as elements are added.
+  std::deque<std::array<double, 6>> board_poses;
 
   // For each sample of data:
   for (size_t i = 0; i < data.size(); ++i)
@@ -375,6 +384,165 @@ int Optimizer::optimize(OptimizationParams& params,
                                   NULL,  // squared loss
                                   free_params);
       }
+      else if (params.error_blocks[j]->type == "camera2d_to_camera2d")
+      {
+        // Stereo reprojection error: estimates per-observation checkerboard pose
+        // and computes pixel reprojection error in both cameras.
+        auto p = std::dynamic_pointer_cast<OptimizationParams::Camera2dToCamera2dParams>(params.error_blocks[j]);
+        std::string a_name = p->model_a;
+        std::string b_name = p->model_b;
+
+        if (a_name == "" || b_name == "" || a_name == b_name)
+        {
+          RCLCPP_ERROR(logger, "camera2d_to_camera2d improperly configured: model_a and model_b params must be set!");
+          return 0;
+        }
+
+        if (p->points_x <= 0 || p->points_y <= 0 || p->point_size <= 0.0)
+        {
+          RCLCPP_ERROR(logger, "camera2d_to_camera2d requires points_x, points_y, and size parameters");
+          return 0;
+        }
+
+        if (!hasSensor(data[i], a_name) || !hasSensor(data[i], b_name))
+          continue;
+
+        auto camera_a = dynamic_cast<Camera2dModel*>(models_[a_name]);
+        auto camera_b = dynamic_cast<Camera2dModel*>(models_[b_name]);
+        if (!camera_a || !camera_b)
+        {
+          RCLCPP_ERROR(logger, "camera2d_to_camera2d requires both models to be camera2d type");
+          return 0;
+        }
+
+        // Build checkerboard grid points (z=0 plane, origin at first corner)
+        std::vector<geometry_msgs::msg::Point> grid_points;
+        for (int gy = 0; gy < p->points_y; ++gy)
+        {
+          for (int gx = 0; gx < p->points_x; ++gx)
+          {
+            geometry_msgs::msg::Point pt;
+            pt.x = gx * p->point_size;
+            pt.y = gy * p->point_size;
+            pt.z = 0.0;
+            grid_points.push_back(pt);
+          }
+        }
+
+        // Allocate per-observation board pose (persists through optimization)
+        board_poses.emplace_back();
+        auto& pose = board_poses.back();
+        pose.fill(0.0);
+
+        // Initialize board pose via PnP using camera A's intrinsics and observed features.
+        // This gives the board pose in camera A's frame, then we transform to world frame.
+        {
+          int sensor_idx = getSensorIndex(data[i], a_name);
+          if (sensor_idx >= 0 &&
+              data[i].observations[sensor_idx].features.size() == grid_points.size())
+          {
+            // Get camera A intrinsics from the observation's camera info (P matrix)
+            const auto& cam_info = data[i].observations[sensor_idx].ext_camera_info.camera_info;
+            double fx = cam_info.p[0];
+            double fy = cam_info.p[5];
+            double cx = cam_info.p[2];
+            double cy = cam_info.p[6];
+
+            // Build 3D object points and 2D image points for solvePnP
+            std::vector<cv::Point3f> obj_pts(grid_points.size());
+            std::vector<cv::Point2f> img_pts(grid_points.size());
+            for (size_t k = 0; k < grid_points.size(); ++k)
+            {
+              obj_pts[k] = cv::Point3f(
+                  static_cast<float>(grid_points[k].x),
+                  static_cast<float>(grid_points[k].y),
+                  static_cast<float>(grid_points[k].z));
+              img_pts[k] = cv::Point2f(
+                  static_cast<float>(data[i].observations[sensor_idx].features[k].point.x),
+                  static_cast<float>(data[i].observations[sensor_idx].features[k].point.y));
+            }
+
+            cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) <<
+                fx, 0, cx,
+                0, fy, cy,
+                0, 0, 1);
+            cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, CV_64F);  // features are from rectified image
+
+            cv::Mat rvec, tvec;
+            if (cv::solvePnP(obj_pts, img_pts, camera_matrix, dist_coeffs,
+                              rvec, tvec, false, cv::SOLVEPNP_ITERATIVE))
+            {
+              // PnP gives board pose in camera A's frame: T_cam_board
+              // We need board pose in world frame: T_world_board = T_world_cam * T_cam_board
+              cv::Mat R_cv;
+              cv::Rodrigues(rvec, R_cv);
+
+              KDL::Rotation R_cam_board(
+                  R_cv.at<double>(0, 0), R_cv.at<double>(0, 1), R_cv.at<double>(0, 2),
+                  R_cv.at<double>(1, 0), R_cv.at<double>(1, 1), R_cv.at<double>(1, 2),
+                  R_cv.at<double>(2, 0), R_cv.at<double>(2, 1), R_cv.at<double>(2, 2));
+              KDL::Vector t_cam_board(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+              KDL::Frame T_cam_board(R_cam_board, t_cam_board);
+
+              // Get camera A's FK: T_world_cam
+              KDL::Frame T_world_cam = camera_a->getChainFK(*offsets_, data[i].joint_states);
+              KDL::Frame T_world_board = T_world_cam * T_cam_board;
+
+              double rx, ry, rz;
+              axis_magnitude_from_rotation(T_world_board.M, rx, ry, rz);
+              pose[0] = T_world_board.p.x();
+              pose[1] = T_world_board.p.y();
+              pose[2] = T_world_board.p.z();
+              pose[3] = rx;
+              pose[4] = ry;
+              pose[5] = rz;
+            }
+            else
+            {
+              RCLCPP_WARN(logger, "stereo_camera_error: solvePnP failed for observation %zu", i);
+            }
+          }
+          else
+          {
+            RCLCPP_WARN(logger, "stereo_camera_error: no camera data for PnP init, observation %zu", i);
+          }
+        }
+
+        ceres::CostFunction* cost = StereoReprojectionError::Create(
+            camera_a, camera_b, p->scale, offsets_.get(), data[i], grid_points);
+
+        if (progress_to_stdout)
+        {
+          double* eval_params[2] = {free_params, pose.data()};
+          double* residuals = new double[cost->num_residuals()];
+
+          cost->Evaluate(eval_params, residuals, NULL);
+
+          size_t n_feat = static_cast<size_t>(cost->num_residuals() / 4);
+          std::cout << "STEREO INITIAL COST (" << i << ")" << std::endl << "  cam_a x: ";
+          for (size_t k = 0; k < n_feat; ++k)
+            std::cout << "  " << std::setw(10) << std::fixed << residuals[4 * k + 0];
+          std::cout << std::endl << "  cam_a y: ";
+          for (size_t k = 0; k < n_feat; ++k)
+            std::cout << "  " << std::setw(10) << std::fixed << residuals[4 * k + 1];
+          std::cout << std::endl << "  cam_b x: ";
+          for (size_t k = 0; k < n_feat; ++k)
+            std::cout << "  " << std::setw(10) << std::fixed << residuals[4 * k + 2];
+          std::cout << std::endl << "  cam_b y: ";
+          for (size_t k = 0; k < n_feat; ++k)
+            std::cout << "  " << std::setw(10) << std::fixed << residuals[4 * k + 3];
+          std::cout << std::endl << std::endl;
+
+          delete[] residuals;
+        }
+
+        // Use Cauchy loss to be robust to outlier observations (e.g., misdetected corners).
+        // Cauchy loss transitions from quadratic to logarithmic at residual = scale parameter.
+        // Scale of 2.0 pixels: residuals < 2px behave as squared loss, larger ones are downweighted.
+        problem->AddResidualBlock(cost,
+                                  new ceres::CauchyLoss(2.0),
+                                  free_params, pose.data());
+      }
       else if (params.error_blocks[j]->type == "plane_to_plane")
       {
         // This error block can process data generated by the PlaneFinder,
@@ -452,9 +620,26 @@ int Optimizer::optimize(OptimizationParams& params,
   ceres::Solver::Options options;
   options.use_nonmonotonic_steps = true;
   options.function_tolerance = 1e-10;
-  options.linear_solver_type = ceres::DENSE_QR;
   options.max_num_iterations = params.max_num_iterations;
   options.minimizer_progress_to_stdout = progress_to_stdout;
+
+  // Use Schur complement if we have per-observation board poses (bundle adjustment)
+  if (!board_poses.empty())
+  {
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+
+    // Set up parameter block ordering: per-observation poses are eliminated first
+    // (group 0), global offsets stay in the reduced system (group 1)
+    auto* ordering = new ceres::ParameterBlockOrdering();
+    ordering->AddElementToGroup(free_params, 1);  // global offsets: keep
+    for (auto& pose : board_poses)
+      ordering->AddElementToGroup(pose.data(), 0);  // board poses: eliminate
+    options.linear_solver_ordering.reset(ordering);
+  }
+  else
+  {
+    options.linear_solver_type = ceres::DENSE_QR;
+  }
 
   if (progress_to_stdout)
     std::cout << "\nSolver output:" << std::endl;
@@ -469,7 +654,9 @@ int Optimizer::optimize(OptimizationParams& params,
 
   // Compute covariance and update standard deviations in offsets
   {
-    // Compute covariance matrix for all free parameters as a single block
+    // Compute covariance only for global calibration offsets (not per-observation poses)
+    int global_param_size = static_cast<int>(offsets_->size());
+
     ceres::Covariance::Options covariance_options;
     ceres::Covariance covariance(covariance_options);
 
@@ -479,21 +666,21 @@ int Optimizer::optimize(OptimizationParams& params,
     if (covariance.Compute(covariance_blocks, problem))
     {
       // Prepare stddev vector (default to NaN)
-      std::vector<double> param_stddevs(num_params_, std::numeric_limits<double>::quiet_NaN());
+      std::vector<double> param_stddevs(global_param_size, std::numeric_limits<double>::quiet_NaN());
 
-      // Extract full covariance block and compute standard deviations (sqrt of diagonal)
-      std::vector<double> covariance_matrix(num_params_ * num_params_);
+      // Extract covariance block for global offsets and compute standard deviations
+      std::vector<double> covariance_matrix(global_param_size * global_param_size);
       if (covariance.GetCovarianceBlock(free_params, free_params, covariance_matrix.data()))
       {
-        for (int i = 0; i < num_params_; ++i)
+        for (int i = 0; i < global_param_size; ++i)
         {
-          double variance = covariance_matrix[i * num_params_ + i];
+          double variance = covariance_matrix[i * global_param_size + i];
           double std_dev = std::sqrt(std::max(0.0, variance));
           param_stddevs[i] = std_dev;
         }
 
         offsets_->setStandardDeviations(param_stddevs);
-        RCLCPP_INFO(logger, "Computed covariance and updated standard deviations for %d parameters", num_params_);
+        RCLCPP_INFO(logger, "Computed covariance and updated standard deviations for %d parameters", global_param_size);
       }
       else
       {

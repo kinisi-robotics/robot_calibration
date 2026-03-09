@@ -84,6 +84,19 @@ struct OptimizationParams
     double scale;
   };
 
+  struct Camera2dToCamera2dParams : Params
+  {
+    // Camera2d models to compare
+    std::string model_a;
+    std::string model_b;
+    // Checkerboard grid geometry
+    int points_x;
+    int points_y;
+    double point_size;
+    // Scalar applied to residual
+    double scale;
+  };
+
   struct Chain3dToPlaneParams : Params
   {
     // Chain3d model to use

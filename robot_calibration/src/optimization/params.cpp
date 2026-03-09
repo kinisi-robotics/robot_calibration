@@ -33,7 +33,10 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
   rclcpp::Logger logger = node->get_logger();
 
   // Base link should be consistent across all calibration steps
-  base_link = node->declare_parameter<std::string>("base_link", "base_link");
+  if (!node->has_parameter("base_link"))
+    base_link = node->declare_parameter<std::string>("base_link", "base_link");
+  else
+    base_link = node->get_parameter("base_link").as_string();
 
   max_num_iterations = node->declare_parameter<int>(
     parameter_ns + ".max_num_iterations", 1000);
@@ -116,6 +119,19 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       params->type = type;
       params->model_2d = node->declare_parameter<std::string>(prefix + ".model_2d", std::string());
       params->model_3d = node->declare_parameter<std::string>(prefix + ".model_3d", std::string());
+      params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
+      error_blocks.push_back(params);
+    }
+    else if (type == "camera2d_to_camera2d")
+    {
+      std::shared_ptr<Camera2dToCamera2dParams> params = std::make_shared<Camera2dToCamera2dParams>();
+      params->name = name;
+      params->type = type;
+      params->model_a = node->declare_parameter<std::string>(prefix + ".model_a", std::string());
+      params->model_b = node->declare_parameter<std::string>(prefix + ".model_b", std::string());
+      params->points_x = node->declare_parameter<int>(prefix + ".points_x", 0);
+      params->points_y = node->declare_parameter<int>(prefix + ".points_y", 0);
+      params->point_size = node->declare_parameter<double>(prefix + ".size", 0.0);
       params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
       error_blocks.push_back(params);
     }

@@ -64,6 +64,11 @@ public:
    */
   virtual std::string getType() const;
 
+  /**
+   * @brief Get the parameter name used for camera intrinsic offsets.
+   */
+  std::string getParamName() const { return param_name_; }
+
 protected:
   std::string param_name_;
 };

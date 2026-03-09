@@ -91,6 +91,7 @@ target_link_libraries(robot_calibration
   ${Boost_LIBRARIES}
   ${CERES_LIBRARIES}
   ${orocos_kdl_LIBRARIES}
+  ${OpenCV_LIBS}
 )
 ament_target_dependencies(robot_calibration
   ${dependencies}
