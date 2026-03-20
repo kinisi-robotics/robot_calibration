@@ -102,6 +102,7 @@ private:
   rclcpp::Clock::SharedPtr clock_;
 
   bool waiting_;
+  rclcpp::Time min_stamp_{0, 0, RCL_ROS_TIME};
   sensor_msgs::msg::PointCloud2 cloud_;
 
   std::vector<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> tracker_publishers_;

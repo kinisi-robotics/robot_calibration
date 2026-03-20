@@ -58,6 +58,7 @@ private:
   rclcpp::Clock::SharedPtr clock_;
 
   bool waiting_;
+  rclcpp::Time min_stamp_{0, 0, RCL_ROS_TIME};
   typename T::ConstSharedPtr msg_;
   DepthCameraInfoManager depth_camera_manager_;
   bool has_camera_info_;

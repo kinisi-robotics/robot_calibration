@@ -104,6 +104,10 @@ void CheckerboardFinder<T>::cameraCallback(typename T::ConstSharedPtr msg)
   has_data_ = true;
   if (waiting_)
   {
+    if (rclcpp::Time(msg->header.stamp) < min_stamp_)
+    {
+      return;
+    }
     msg_ = msg;
     waiting_ = false;
   }
@@ -121,8 +125,8 @@ bool CheckerboardFinder<T>::waitForMsg()
     return false;
   }
 
-  // Initial wait cycle so that camera is definitely up to date.
-  rclcpp::sleep_for(std::chrono::milliseconds(100));
+  // Record the current time so the callback rejects stale frames.
+  min_stamp_ = clock_->now();
 
   waiting_ = true;
   int count = 250;

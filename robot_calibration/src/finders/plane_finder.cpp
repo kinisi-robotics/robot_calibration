@@ -181,6 +181,10 @@ void PlaneFinder::cameraCallback(sensor_msgs::msg::PointCloud2::ConstSharedPtr c
   has_data_ = true;
   if (waiting_)
   {
+    if (rclcpp::Time(cloud->header.stamp) < min_stamp_)
+    {
+      return;
+    }
     cloud_ = *cloud;
     waiting_ = false;
   }
@@ -196,8 +200,8 @@ bool PlaneFinder::waitForCloud()
     return false;
   }
 
-  // Initial wait cycle so that camera is definitely up to date.
-  rclcpp::sleep_for(std::chrono::milliseconds(100));
+  // Record the current time so the callback rejects stale frames.
+  min_stamp_ = clock_->now();
 
   waiting_ = true;
   int count = 250;

@@ -69,6 +69,7 @@ protected:
   rclcpp::Clock::SharedPtr clock_;
 
   bool waiting_;
+  rclcpp::Time min_stamp_{0, 0, RCL_ROS_TIME};
   sensor_msgs::msg::LaserScan scan_;
 
   std::string laser_sensor_name_;

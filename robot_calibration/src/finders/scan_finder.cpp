@@ -90,6 +90,10 @@ void ScanFinder::scanCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
   has_data_ = true;
   if (waiting_)
   {
+    if (rclcpp::Time(scan->header.stamp) < min_stamp_)
+    {
+      return;
+    }
     scan_ = *scan;
     waiting_ = false;
   }
@@ -105,8 +109,8 @@ bool ScanFinder::waitForScan()
     return false;
   }
 
-  // Initial wait cycle so that laser scan is definitely up to date.
-  rclcpp::sleep_for(std::chrono::milliseconds(100));
+  // Record the current time so the callback rejects stale frames.
+  min_stamp_ = clock_->now();
 
   waiting_ = true;
   int count = 250;
