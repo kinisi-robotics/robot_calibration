@@ -148,6 +148,18 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
       error_blocks.push_back(params);
     }
+    else if (type == "chain3d_to_plane_normal")
+    {
+      std::shared_ptr<Chain3dToPlaneNormalParams> params = std::make_shared<Chain3dToPlaneNormalParams>();
+      params->name = name;
+      params->type = type;
+      params->model = node->declare_parameter<std::string>(prefix + ".model", std::string());
+      params->a = node->declare_parameter<double>(prefix + ".a", 0.0);
+      params->b = node->declare_parameter<double>(prefix + ".b", 0.0);
+      params->c = node->declare_parameter<double>(prefix + ".c", 1.0);
+      params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
+      error_blocks.push_back(params);
+    }
     else if (type == "chain3d_to_mesh")
     {
       std::shared_ptr<Chain3dToMeshParams> params = std::make_shared<Chain3dToMeshParams>();

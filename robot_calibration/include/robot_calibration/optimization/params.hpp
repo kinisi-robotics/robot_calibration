@@ -107,6 +107,16 @@ struct OptimizationParams
     double scale;
   };
 
+  struct Chain3dToPlaneNormalParams : Params
+  {
+    // Chain3d model to use
+    std::string model;
+    // Target normal for the plane (normalized internally)
+    double a, b, c;
+    // Scalar applied to residual
+    double scale;
+  };
+
   struct Chain3dToMeshParams : Params
   {
     // Chain3d model to use

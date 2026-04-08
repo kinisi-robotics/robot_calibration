@@ -42,6 +42,7 @@
 #include <robot_calibration/cost_functions/chain3d_to_chain3d_error.hpp>
 #include <robot_calibration/cost_functions/chain3d_to_mesh_error.hpp>
 #include <robot_calibration/cost_functions/chain3d_to_plane_error.hpp>
+#include <robot_calibration/cost_functions/chain3d_to_plane_normal_error.hpp>
 #include <robot_calibration/cost_functions/plane_to_plane_error.hpp>
 #include <robot_calibration/cost_functions/outrageous_error.hpp>
 #include <robot_calibration/models/camera2d.hpp>
@@ -274,6 +275,56 @@ int Optimizer::optimize(OptimizationParams& params,
 
         problem->AddResidualBlock(cost,
                                   NULL /* squared loss */,
+                                  free_params);
+      }
+      else if (params.error_blocks[j]->type == "chain3d_to_plane_normal")
+      {
+        // This error block minimizes the angle between the detected plane normal
+        // and a target normal specified in config
+        auto p = std::dynamic_pointer_cast<OptimizationParams::Chain3dToPlaneNormalParams>(params.error_blocks[j]);
+        std::string chain_name = p->model;
+
+        // Do some basic error checking for bad params
+        if (chain_name == "")
+        {
+          RCLCPP_ERROR(logger, "chain3d_to_plane_normal improperly configured: model param must be set!");
+          return 0;
+        }
+
+        // Check that this sample has the required features/observations
+        if (!hasSensor(data[i], chain_name))
+          continue;
+
+        // Create the block
+        ceres::CostFunction * cost =
+          Chain3dToPlaneNormal::Create(models_[chain_name],
+                                       offsets_.get(),
+                                       data[i],
+                                       p->a,
+                                       p->b,
+                                       p->c,
+                                       p->scale);
+
+        // Output initial error
+        if (progress_to_stdout)
+        {
+          double ** params = new double*[1];
+          params[0] = free_params;
+          double * residuals = new double[cost->num_residuals()];
+
+          cost->Evaluate(params, residuals, NULL);
+
+          std::cout << "INITIAL COST (" << i << ")" << std::endl << "  a: ";
+          std::cout << "  " << std::setw(10) << std::fixed << residuals[0];
+          std::cout << std::endl << "  b: ";
+          std::cout << "  " << std::setw(10) << std::fixed << residuals[1];
+          std::cout << std::endl << "  c: ";
+          std::cout << "  " << std::setw(10) << std::fixed << residuals[2];
+          std::cout << std::endl << std::endl;
+        }
+
+        problem->AddResidualBlock(cost,
+                                  NULL,  // squared loss
                                   free_params);
       }
       else if (params.error_blocks[j]->type == "chain3d_to_mesh")
