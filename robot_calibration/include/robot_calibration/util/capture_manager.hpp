@@ -43,6 +43,7 @@ public:
 private:
   void callback(std_msgs::msg::String::ConstSharedPtr msg);
 
+  rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<robot_calibration_msgs::msg::CalibrationData>::SharedPtr data_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ready_pub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr urdf_sub_;

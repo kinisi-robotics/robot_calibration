@@ -36,6 +36,8 @@ CaptureManager::CaptureManager()
 
 bool CaptureManager::init(rclcpp::Node::SharedPtr node)
 {
+  node_ = node;
+
   // Publish calibration data (to be recorded by rosbag)
   data_pub_ = node->create_publisher<robot_calibration_msgs::msg::CalibrationData>("/calibration_data", 10);
 
@@ -151,10 +153,17 @@ void CaptureManager::callback(std_msgs::msg::String::ConstSharedPtr msg)
 
 std::string CaptureManager::getUrdf()
 {
+  auto last_log = std::chrono::steady_clock::now() - std::chrono::seconds(5);
   while (!description_valid_ && rclcpp::ok())
   {
-    RCLCPP_WARN(LOGGER, "Waiting for robot_description");
-    rclcpp::sleep_for(std::chrono::seconds(5));
+    rclcpp::spin_some(node_);
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_log >= std::chrono::seconds(5))
+    {
+      RCLCPP_WARN(LOGGER, "Waiting for robot_description");
+      last_log = now;
+    }
+    rclcpp::sleep_for(std::chrono::milliseconds(100));
   }
   return description_;
 }
