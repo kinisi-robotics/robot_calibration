@@ -23,11 +23,7 @@
 #include <string>
 #include <math.h>
 #include <ceres/ceres.h>
-#include <fstream>
-#include <mutex>
-#include <unistd.h>
-#include <atomic>
-#include <robot_calibration/models/camera3d.hpp> 
+#include <robot_calibration/models/camera3d.hpp>
 #include <robot_calibration/models/chain3d.hpp>
 #include <robot_calibration/optimization/offsets.hpp>
 #include <robot_calibration/util/calibration_data.hpp>
@@ -188,41 +184,6 @@ struct Chain3dToMesh
     // Project the camera observations
     std::vector<geometry_msgs::msg::PointStamped> chain_pts =
         chain_model_->project(data_, *offsets_);
-
-    // Debug: on first invocation, write chain points and mesh vertices to a PLY and terminate
-    static std::once_flag _chain_mesh_debug_once;
-    std::call_once(_chain_mesh_debug_once, [this, chain_pts]() {
-      std::string filename = "/tmp/chain_mesh_debug_" + std::to_string(getpid()) + ".ply";
-      std::ofstream ofs(filename);
-      if (ofs)
-      {
-        size_t n_chain = chain_pts.size();
-        size_t n_mesh = mesh_->vertex_count;
-        size_t n_vertices = n_chain + n_mesh;
-        ofs << "ply\nformat ascii 1.0\n";
-        ofs << "element vertex " << n_vertices << "\n";
-        ofs << "property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\n";
-        ofs << "end_header\n";
-        // Chain points in red
-        for (const auto &pt : chain_pts)
-        {
-          ofs << pt.point.x << " " << pt.point.y << " " << pt.point.z << " 255 0 0\n";
-        }
-        // Mesh vertices in blue
-        for (size_t vi = 0; vi < mesh_->vertex_count; ++vi)
-        {
-          size_t idx = 3 * vi;
-          ofs << mesh_->vertices[idx] << " " << mesh_->vertices[idx + 1] << " " << mesh_->vertices[idx + 2] << " 0 0 255\n";
-        }
-        ofs.close();
-        std::cerr << "Wrote debug PLY to " << filename << std::endl;
-      }
-      else
-      {
-        std::cerr << "Failed to open " << filename << " for writing" << std::endl;
-      }
-
-    });
 
     // Compute residuals
     for (size_t pt = 0; pt < chain_pts.size() ; ++pt)
