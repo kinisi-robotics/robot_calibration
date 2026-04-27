@@ -126,6 +126,18 @@ ament_target_dependencies(calibrate
   ${dependencies}
 )
 
+add_executable(calibration_service_node src/nodes/calibration_service_node.cpp)
+target_link_libraries(calibration_service_node
+  robot_calibration
+  ${Boost_LIBRARIES}
+  ${CERES_LIBRARIES}
+  ${orocos_kdl_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+ament_target_dependencies(calibration_service_node
+  ${dependencies}
+)
+
 add_executable(base_calibration_node src/nodes/base_calibration.cpp)
 target_link_libraries(base_calibration_node
   robot_calibration
@@ -170,6 +182,7 @@ install(DIRECTORY include/ DESTINATION include)
 install(TARGETS
   base_calibration_node
   calibrate
+  calibration_service_node
   magnetometer_calibration
   robot_calibration
   robot_calibration_feature_finders

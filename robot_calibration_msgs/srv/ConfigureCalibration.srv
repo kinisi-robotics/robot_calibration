@@ -1,0 +1,7 @@
+# Reconfigure the calibration service node.
+# Destroys the current worker (CaptureManager, subscriptions, params) and
+# rebuilds from the specified YAML config file.
+string config_file
+---
+bool success
+string message

@@ -25,6 +25,16 @@
 
 namespace robot_calibration
 {
+
+OptimizationResultStrings getResultStrings(Optimizer& optimizer,
+                                           const std::string& initial_urdf)
+{
+  OptimizationResultStrings results;
+  results.calibrated_urdf = optimizer.getOffsets()->updateURDF(initial_urdf);
+  results.offset_yaml = optimizer.getOffsets()->getOffsetYAML();
+  return results;
+}
+
 bool exportResults(Optimizer& optimizer, const std::string& initial_urdf,
                    const std::vector<robot_calibration_msgs::msg::CalibrationData>& data)
 {

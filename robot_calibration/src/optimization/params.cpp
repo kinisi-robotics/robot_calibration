@@ -22,6 +22,20 @@
 namespace robot_calibration
 {
 
+namespace
+{
+// Idempotent parameter access: re-entrant-safe across multiple LoadFromROS
+// calls on the same node. Required for a long-running service node that
+// handles many optimization requests without restarting.
+template <typename T>
+T get_or_declare(rclcpp::Node::SharedPtr node, const std::string& name, const T& default_val)
+{
+  if (node->has_parameter(name))
+    return node->get_parameter(name).get_value<T>();
+  return node->declare_parameter<T>(name, default_val);
+}
+}  // namespace
+
 OptimizationParams::OptimizationParams() :
   base_link("base_link")
 {
@@ -33,74 +47,71 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
   rclcpp::Logger logger = node->get_logger();
 
   // Base link should be consistent across all calibration steps
-  if (!node->has_parameter("base_link"))
-    base_link = node->declare_parameter<std::string>("base_link", "base_link");
-  else
-    base_link = node->get_parameter("base_link").as_string();
+  base_link = get_or_declare<std::string>(node, "base_link", "base_link");
 
-  max_num_iterations = node->declare_parameter<int>(
-    parameter_ns + ".max_num_iterations", 1000);
+  max_num_iterations = get_or_declare<int>(
+    node, parameter_ns + ".max_num_iterations", 1000);
 
-  free_params = node->declare_parameter<std::vector<std::string>>(
-    parameter_ns + ".free_params", std::vector<std::string>());
+  free_params = get_or_declare<std::vector<std::string>>(
+    node, parameter_ns + ".free_params", std::vector<std::string>());
 
   free_frames.clear();
-  auto free_frame_names = node->declare_parameter<std::vector<std::string>>(
-    parameter_ns + ".free_frames", std::vector<std::string>());
+  auto free_frame_names = get_or_declare<std::vector<std::string>>(
+    node, parameter_ns + ".free_frames", std::vector<std::string>());
   for (auto name : free_frame_names)
   {
     RCLCPP_INFO(logger, "Adding free frame: %s", name.c_str());
     std::string prefix = parameter_ns + "." + name;
     FreeFrameParams params;
     params.name = name;
-    params.x = node->declare_parameter<bool>(prefix + ".x", false);
-    params.y = node->declare_parameter<bool>(prefix + ".y", false);
-    params.z = node->declare_parameter<bool>(prefix + ".z", false);
-    params.roll = node->declare_parameter<bool>(prefix + ".roll", false);
-    params.pitch = node->declare_parameter<bool>(prefix + ".pitch", false);
-    params.yaw = node->declare_parameter<bool>(prefix + ".yaw", false);
+    params.x = get_or_declare<bool>(node, prefix + ".x", false);
+    params.y = get_or_declare<bool>(node, prefix + ".y", false);
+    params.z = get_or_declare<bool>(node, prefix + ".z", false);
+    params.roll = get_or_declare<bool>(node, prefix + ".roll", false);
+    params.pitch = get_or_declare<bool>(node, prefix + ".pitch", false);
+    params.yaw = get_or_declare<bool>(node, prefix + ".yaw", false);
     free_frames.push_back(params);
   }
 
   free_frames_initial_values.clear();
-  free_frame_names = node->declare_parameter<std::vector<std::string>>(
-    parameter_ns + ".free_frames_initial_values", std::vector<std::string>());
+  free_frame_names = get_or_declare<std::vector<std::string>>(
+    node, parameter_ns + ".free_frames_initial_values", std::vector<std::string>());
   for (auto name : free_frame_names)
   {
     RCLCPP_INFO(logger, "Adding initial values for: %s", name.c_str());
     std::string prefix = parameter_ns + "." + name + "_initial_values";
     FreeFrameInitialValue params;
     params.name = name;
-    params.x = node->declare_parameter<double>(prefix + ".x", 0.0);
-    params.y = node->declare_parameter<double>(prefix + ".y", 0.0);
-    params.z = node->declare_parameter<double>(prefix + ".z", 0.0);
-    params.roll = node->declare_parameter<double>(prefix + ".roll", 0.0);
-    params.pitch = node->declare_parameter<double>(prefix + ".pitch", 0.0);
-    params.yaw = node->declare_parameter<double>(prefix + ".yaw", 0.0);
+    params.x = get_or_declare<double>(node, prefix + ".x", 0.0);
+    params.y = get_or_declare<double>(node, prefix + ".y", 0.0);
+    params.z = get_or_declare<double>(node, prefix + ".z", 0.0);
+    params.roll = get_or_declare<double>(node, prefix + ".roll", 0.0);
+    params.pitch = get_or_declare<double>(node, prefix + ".pitch", 0.0);
+    params.yaw = get_or_declare<double>(node, prefix + ".yaw", 0.0);
     free_frames_initial_values.push_back(params);
   }
 
   models.clear();
-  auto model_names = node->declare_parameter<std::vector<std::string>>(
-    parameter_ns + ".models", std::vector<std::string>());
+  auto model_names = get_or_declare<std::vector<std::string>>(
+    node, parameter_ns + ".models", std::vector<std::string>());
   for (auto name : model_names)
   {
     RCLCPP_INFO(logger, "Adding model: %s", name.c_str());
     ModelParams params;
     params.name = name;
-    params.type = node->declare_parameter<std::string>(parameter_ns + "." + name + ".type", std::string());
-    params.frame = node->declare_parameter<std::string>(parameter_ns + "." + name + ".frame", std::string());
-    params.param_name = node->declare_parameter<std::string>(parameter_ns + "." + name + ".param_name", std::string());
+    params.type = get_or_declare<std::string>(node, parameter_ns + "." + name + ".type", std::string());
+    params.frame = get_or_declare<std::string>(node, parameter_ns + "." + name + ".frame", std::string());
+    params.param_name = get_or_declare<std::string>(node, parameter_ns + "." + name + ".param_name", std::string());
     models.push_back(params);
   }
 
   error_blocks.clear();
-  auto error_block_names = node->declare_parameter<std::vector<std::string>>(
-    parameter_ns + ".error_blocks", std::vector<std::string>());
+  auto error_block_names = get_or_declare<std::vector<std::string>>(
+    node, parameter_ns + ".error_blocks", std::vector<std::string>());
   for (auto name : error_block_names)
   {
     std::string prefix = parameter_ns + "." + name;
-    std::string type = node->declare_parameter<std::string>(prefix + ".type", std::string());
+    std::string type = get_or_declare<std::string>(node, prefix + ".type", std::string());
     RCLCPP_INFO(logger, "Adding %s: %s", type.c_str(), name.c_str());
 
     if (type == "chain3d_to_chain3d")
@@ -108,8 +119,8 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<Chain3dToChain3dParams> params = std::make_shared<Chain3dToChain3dParams>();
       params->name = name;
       params->type = type;
-      params->model_a = node->declare_parameter<std::string>(prefix + ".model_a", std::string());
-      params->model_b = node->declare_parameter<std::string>(prefix + ".model_b", std::string());
+      params->model_a = get_or_declare<std::string>(node, prefix + ".model_a", std::string());
+      params->model_b = get_or_declare<std::string>(node, prefix + ".model_b", std::string());
       error_blocks.push_back(params);
     }
     else if (type == "chain3d_to_camera2d")
@@ -117,9 +128,9 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<Chain3dToCamera2dParams> params = std::make_shared<Chain3dToCamera2dParams>();
       params->name = name;
       params->type = type;
-      params->model_2d = node->declare_parameter<std::string>(prefix + ".model_2d", std::string());
-      params->model_3d = node->declare_parameter<std::string>(prefix + ".model_3d", std::string());
-      params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
+      params->model_2d = get_or_declare<std::string>(node, prefix + ".model_2d", std::string());
+      params->model_3d = get_or_declare<std::string>(node, prefix + ".model_3d", std::string());
+      params->scale = get_or_declare<double>(node, prefix + ".scale", 1.0);
       error_blocks.push_back(params);
     }
     else if (type == "camera2d_to_camera2d")
@@ -127,12 +138,12 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<Camera2dToCamera2dParams> params = std::make_shared<Camera2dToCamera2dParams>();
       params->name = name;
       params->type = type;
-      params->model_a = node->declare_parameter<std::string>(prefix + ".model_a", std::string());
-      params->model_b = node->declare_parameter<std::string>(prefix + ".model_b", std::string());
-      params->points_x = node->declare_parameter<int>(prefix + ".points_x", 0);
-      params->points_y = node->declare_parameter<int>(prefix + ".points_y", 0);
-      params->point_size = node->declare_parameter<double>(prefix + ".size", 0.0);
-      params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
+      params->model_a = get_or_declare<std::string>(node, prefix + ".model_a", std::string());
+      params->model_b = get_or_declare<std::string>(node, prefix + ".model_b", std::string());
+      params->points_x = get_or_declare<int>(node, prefix + ".points_x", 0);
+      params->points_y = get_or_declare<int>(node, prefix + ".points_y", 0);
+      params->point_size = get_or_declare<double>(node, prefix + ".size", 0.0);
+      params->scale = get_or_declare<double>(node, prefix + ".scale", 1.0);
       error_blocks.push_back(params);
     }
     else if (type == "chain3d_to_plane")
@@ -140,12 +151,12 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<Chain3dToPlaneParams> params = std::make_shared<Chain3dToPlaneParams>();
       params->name = name;
       params->type = type;
-      params->model = node->declare_parameter<std::string>(prefix + ".model", std::string());
-      params->a = node->declare_parameter<double>(prefix + ".a", 0.0);
-      params->b = node->declare_parameter<double>(prefix + ".b", 0.0);
-      params->c = node->declare_parameter<double>(prefix + ".c", 1.0);
-      params->d = node->declare_parameter<double>(prefix + ".d", 0.0);
-      params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
+      params->model = get_or_declare<std::string>(node, prefix + ".model", std::string());
+      params->a = get_or_declare<double>(node, prefix + ".a", 0.0);
+      params->b = get_or_declare<double>(node, prefix + ".b", 0.0);
+      params->c = get_or_declare<double>(node, prefix + ".c", 1.0);
+      params->d = get_or_declare<double>(node, prefix + ".d", 0.0);
+      params->scale = get_or_declare<double>(node, prefix + ".scale", 1.0);
       error_blocks.push_back(params);
     }
     else if (type == "chain3d_to_plane_normal")
@@ -153,11 +164,11 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<Chain3dToPlaneNormalParams> params = std::make_shared<Chain3dToPlaneNormalParams>();
       params->name = name;
       params->type = type;
-      params->model = node->declare_parameter<std::string>(prefix + ".model", std::string());
-      params->a = node->declare_parameter<double>(prefix + ".a", 0.0);
-      params->b = node->declare_parameter<double>(prefix + ".b", 0.0);
-      params->c = node->declare_parameter<double>(prefix + ".c", 1.0);
-      params->scale = node->declare_parameter<double>(prefix + ".scale", 1.0);
+      params->model = get_or_declare<std::string>(node, prefix + ".model", std::string());
+      params->a = get_or_declare<double>(node, prefix + ".a", 0.0);
+      params->b = get_or_declare<double>(node, prefix + ".b", 0.0);
+      params->c = get_or_declare<double>(node, prefix + ".c", 1.0);
+      params->scale = get_or_declare<double>(node, prefix + ".scale", 1.0);
       error_blocks.push_back(params);
     }
     else if (type == "chain3d_to_mesh")
@@ -165,11 +176,11 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<Chain3dToMeshParams> params = std::make_shared<Chain3dToMeshParams>();
       params->name = name;
       params->type = type;
-      params->model = node->declare_parameter<std::string>(prefix + ".model", std::string());
-      params->link_name = node->declare_parameter<std::string>(prefix + ".link_name", std::string());
+      params->model = get_or_declare<std::string>(node, prefix + ".model", std::string());
+      params->link_name = get_or_declare<std::string>(node, prefix + ".link_name", std::string());
       // Optional per-error-block override resource URI for the mesh
-      params->mesh_override = node->declare_parameter<std::string>(
-        prefix + ".mesh_override", std::string());
+      params->mesh_override = get_or_declare<std::string>(
+        node, prefix + ".mesh_override", std::string());
       error_blocks.push_back(params);
     }
     else if (type == "plane_to_plane")
@@ -177,10 +188,10 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<PlaneToPlaneParams> params = std::make_shared<PlaneToPlaneParams>();
       params->name = name;
       params->type = type;
-      params->model_a = node->declare_parameter<std::string>(prefix + ".model_a", std::string());
-      params->model_b = node->declare_parameter<std::string>(prefix + ".model_b", std::string());
-      params->normal_scale = node->declare_parameter<double>(prefix + ".normal_scale", 1.0);
-      params->offset_scale = node->declare_parameter<double>(prefix + ".offset_scale", 1.0);
+      params->model_a = get_or_declare<std::string>(node, prefix + ".model_a", std::string());
+      params->model_b = get_or_declare<std::string>(node, prefix + ".model_b", std::string());
+      params->normal_scale = get_or_declare<double>(node, prefix + ".normal_scale", 1.0);
+      params->offset_scale = get_or_declare<double>(node, prefix + ".offset_scale", 1.0);
       error_blocks.push_back(params);
     }
     else if (type == "outrageous")
@@ -188,10 +199,10 @@ bool OptimizationParams::LoadFromROS(rclcpp::Node::SharedPtr node,
       std::shared_ptr<OutrageousParams> params = std::make_shared<OutrageousParams>();
       params->name = name;
       params->type = type;
-      params->param = node->declare_parameter<std::string>(prefix + ".param", std::string());
-      params->joint_scale = node->declare_parameter<double>(prefix + ".joint_scale", 1.0);
-      params->position_scale = node->declare_parameter<double>(prefix + ".position_scale", 1.0);
-      params->rotation_scale = node->declare_parameter<double>(prefix + ".rotation_scale", 1.0);
+      params->param = get_or_declare<std::string>(node, prefix + ".param", std::string());
+      params->joint_scale = get_or_declare<double>(node, prefix + ".joint_scale", 1.0);
+      params->position_scale = get_or_declare<double>(node, prefix + ".position_scale", 1.0);
+      params->rotation_scale = get_or_declare<double>(node, prefix + ".rotation_scale", 1.0);
       error_blocks.push_back(params);
     }
     else

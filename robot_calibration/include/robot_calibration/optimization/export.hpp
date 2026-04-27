@@ -26,6 +26,25 @@
 
 namespace robot_calibration
 {
+
+/**
+ * @brief Result strings from a calibration optimization, suitable for
+ * returning via a service/action response.
+ */
+struct OptimizationResultStrings
+{
+  std::string offset_yaml;
+  std::string calibrated_urdf;
+};
+
+/**
+ * @brief Compute the calibration result strings without touching the filesystem.
+ * @param optimizer The optimizer instance, where we get our offsets from
+ * @param initial_urdf The initial URDF, to which offsets are added
+ */
+OptimizationResultStrings getResultStrings(Optimizer& optimizer,
+                                           const std::string& initial_urdf);
+
 /**
  * @brief Write the outputs of a calibration
  * @param optimizer The optimizer instance, where we get our offsets from

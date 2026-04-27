@@ -17,6 +17,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ExtendedCameraInfo.msg"
   "msg/Observation.msg"
   "srv/CaptureCalibration.srv"
+  "srv/ConfigureCalibration.srv"
+  "srv/RunOptimization.srv"
   DEPENDENCIES action_msgs builtin_interfaces geometry_msgs sensor_msgs std_msgs
 )
 

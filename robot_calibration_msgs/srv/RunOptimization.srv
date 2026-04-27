@@ -1,0 +1,9 @@
+# Run Ceres optimization on pre-captured calibration data.
+# All calibration parameters (steps, free params, error blocks) come from
+# the node's loaded configuration — only the bag path is needed here.
+string bag_path
+---
+bool success
+string message
+string offset_yaml
+string calibrated_urdf
